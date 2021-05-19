@@ -87,7 +87,7 @@ func main() {
 	}
 
 	app.service = q5.NewIDtsWcfService(soap.NewClient(app.config.WebServiceUrl, soap.WithTimeout(time.Second*3)))
-	sensation := beida_bluebird.New(app.ctx, &beida_bluebird.Config{Port: "COM1"})
+	sensation := beida_bluebird.New(app.ctx, &beida_bluebird.Config{Port: app.config.SerialPort, MapFile: app.config.MapFile})
 	sensation.Run()
 
 	for {

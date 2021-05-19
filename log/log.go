@@ -63,7 +63,7 @@ func init() {
 		ReportCaller: true,
 		Level:        logrus.InfoLevel,
 		ExitFunc: func(i int) {
-			fmt.Println("the log exit!")
+			L.Warn(fmt.Sprintf("→→→→→→→→→→ this application is over by code %d ... ←←←←←←←←←←", i))
 			os.Exit(i)
 		},
 	}

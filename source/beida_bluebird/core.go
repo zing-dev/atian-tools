@@ -51,7 +51,8 @@ type App struct {
 }
 
 type Config struct {
-	Port string
+	Port    string
+	MapFile string
 }
 
 type Protocol struct {
@@ -151,6 +152,7 @@ func New(ctx context.Context, config *Config) *App {
 		cancel:       cancel,
 		Name:         "JBF293K 接口卡RS232/485",
 		Version:      "1.3",
+		Maps:         map[uint32]*Map{},
 		cache:        new(bytes.Buffer),
 		config:       config,
 		protocol:     new(Protocol),
@@ -159,6 +161,7 @@ func New(ctx context.Context, config *Config) *App {
 }
 
 func (a *App) Run() {
+	a.Maps.Load(a.config.MapFile)
 	port, err := serial.Open(a.config.Port, &serial.Mode{
 		BaudRate: 9600,
 		Parity:   serial.NoParity,
@@ -171,7 +174,6 @@ func (a *App) Run() {
 	}
 
 	a.Serial = port
-
 	go a.read()
 }
 
