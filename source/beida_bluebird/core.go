@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	// PassiveQueryInterval  被动模式,外部查询命令间隔为1 秒。
+	// PassiveQueryInterval  被动模式,外部查询命令间隔为1秒。
 	PassiveQueryInterval = time.Second
 
 	CodeStart = 0x82
@@ -85,6 +85,7 @@ func (p *Protocol) IsTypeSmokeSensation() bool {
 	return p.PartType == PartTypeSmokeSensation
 }
 
+// Encode 编码:除首尾外,其余为一个单字节拆成两个字节组成,高位在前,低位在后,每个单字节各自加上0x30
 func (p *Protocol) Encode() [DataLength]byte {
 	now := time.Now()
 	p.Year = byte(now.Year() - 2000)
@@ -102,15 +103,16 @@ func (p *Protocol) Encode() [DataLength]byte {
 	data[DataLength-1] = CodeEnd
 
 	for k, value := range values {
-		data[k*2+1] = (value - value%0x10) / 0x10
-		data[k*2+2] = value % 0x10
+		data[k*2+1] = (value-value%0x10)/0x10 + 0x30
+		data[k*2+2] = value%0x10 + 0x30
 		sum += value
 	}
-	data[23] = (sum - sum%0x10) / 0x10
-	data[24] = sum % 0x10
+	data[23] = (sum-sum%0x10)/0x10 + 0x30
+	data[24] = sum%0x10 + 0x30
 	return data
 }
 
+// Decode 解码:首尾数据为单个字节,其余位为两个单字节各自减去0x30后,高位在前低位在后合并为一个单字节
 func (p *Protocol) Decode(data [DataLength]byte) error {
 	var (
 		values      = make([]byte, 11)
@@ -160,6 +162,7 @@ func New(ctx context.Context, config *Config) *App {
 	}
 }
 
+// Run 运行App应用
 func (a *App) Run() {
 	a.Maps.Load(a.config.MapFile)
 	port, err := serial.Open(a.config.Port, &serial.Mode{
@@ -232,40 +235,7 @@ func (a *App) handle(data []byte) {
 	}
 }
 
-// Decode 数据1-数据12 中的字节拆成2个半字节加上0x30 再发送,先发高字节。
-//起始符 报警命令 控制器号 回路号 部位号 部件类型 时间年 时间月 时间日 时间时 时间分 时间秒 累加和 结束符
-func (a *App) Decode(data [DataLength]byte) (*Protocol, error) {
-	var (
-		values = make([]byte, 11)
-		p      *Protocol
-		sum    byte = 0
-		sign   byte = 0
-	)
-
-	for k := range values {
-		values[k] = (data[k*2+1]-0x30)*0x10 + (data[k*2+2] - 0x30)
-		sum += values[k]
-	}
-	sign = (data[23]-0x30)*0x10 + (data[24] - 0x30)
-	if sum&sign != sign {
-		return nil, errors.New("sum check not equal sign")
-	}
-	p = new(Protocol)
-	p.Cmd = values[0]
-	p.Controller = values[1]
-	p.Loop = values[2]
-	p.Part = values[3]
-	p.PartType = values[4]
-	p.Year = values[5]
-	p.Month = values[6]
-	p.Day = values[7]
-	p.Hour = values[8]
-	p.Minute = values[9]
-	p.Second = values[10]
-	return p, nil
-}
-
-// Protocol get Protocol data, it will block
+// Protocol get Protocol data, it will be block
 func (a *App) Protocol() *Protocol {
 	return <-a.chanProtocol
 }

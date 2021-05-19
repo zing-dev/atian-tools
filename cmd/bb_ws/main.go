@@ -17,9 +17,9 @@ import (
 const SectionName = "BeiDaBlueBird-WebService"
 
 type Config struct {
-	MapFile       string `comment:"(设备和防区的映射文件,必须是xlsx文件(例 ./map_file.xlsx)"`
+	MapFile       string `comment:"(防区和设备的映射文件,必须是xlsx文件(例 ./map_file.xlsx)"`
 	SerialPort    string `comment:"(串口地址(例 COM1)"`
-	WebServiceUrl string `comment:"webservice接收报警地址(例 http://127.0.0.1/)"`
+	WebServiceUrl string `comment:"webservice接收报警地址(例 http://127.0.0.1/webservice)"`
 }
 
 func newConfig() *Config {

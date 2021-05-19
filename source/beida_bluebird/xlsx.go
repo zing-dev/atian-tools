@@ -17,6 +17,10 @@ type Map struct {
 	PartType   byte   //部件类型
 }
 
+func (m *Map) String() string {
+	return fmt.Sprintf("Id:%d,防区名:%s,防区编码:%s,控制器号:%d,回路号:%d,部位号:%d,部件类型:%d", m.Id, m.Name, m.Code, m.Controller, m.Loop, m.Part, m.PartType)
+}
+
 type Maps map[uint32]*Map
 
 // Key Controller PartType Loop Part
@@ -41,8 +45,8 @@ func (m Maps) Load(filename string) {
 		return
 	}
 	rows := file.GetRows(file.GetSheetName(file.GetActiveSheetIndex()))
-	if len(rows) <= 1 {
-		log.L.Fatal("XLSX最少两行数据")
+	if len(rows) < 4 {
+		log.L.Fatal("XLSX最少四行数据")
 		return
 	}
 	log.L.Info("⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇防区和串口设备部件映射注意⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇⬇")
@@ -52,8 +56,9 @@ func (m Maps) Load(filename string) {
 	log.L.Info("→ 第三列必须是控制器号,可以为空,默认为1,范围 1~255")
 	log.L.Info("→ 第四列必须是回路号,范围 1~255")
 	log.L.Info("→ 第五列必须是部位号,范围 1~255")
-	log.L.Info("→ 第六列必须是部件类型,范围 可以为空,默认为1,1~255")
+	log.L.Info("→ 第六列必须是部件类型,范围 可以为空,默认为21,1~255")
 	log.L.Info("⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆防区和串口设备部件映射注意⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆")
+	show := map[int]*Map{}
 	for k, row := range rows[1:] {
 		if len(row) >= 5 {
 			controller := 1
@@ -69,7 +74,7 @@ func (m Maps) Load(filename string) {
 			}
 			part, err := strconv.Atoi(row[4])
 			if err != nil {
-				log.L.Error(fmt.Sprintf("解析 %d 部位号号失败: %s", k+1, err))
+				log.L.Error(fmt.Sprintf("解析 %d 部位号失败: %s", k+1, err))
 				continue
 			}
 			partType := int(PartTypeSmokeSensation)
@@ -87,9 +92,15 @@ func (m Maps) Load(filename string) {
 				PartType:   byte(partType),
 			}
 			m[item.Key()] = item
+			if k == 0 || k == len(rows)/3 || k == len(rows)-2 {
+				show[k] = item
+			}
 		} else {
 			log.L.Error(fmt.Sprintf("第 %d 行数据列数不匹配", k+1))
 		}
+	}
+	for k, v := range show {
+		log.L.Info(fmt.Sprintf("第 %d 个防区: %s", k+1, v.String()))
 	}
 	log.L.Info(fmt.Sprintf("读取完成,共有 %d 个防区", len(m)))
 }
