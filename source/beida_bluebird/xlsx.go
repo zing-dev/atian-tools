@@ -58,6 +58,7 @@ func (m Maps) Load(filename string) {
 	log.L.Info("→ 第五列必须是部位号,范围 1~255")
 	log.L.Info("→ 第六列必须是部件类型,范围 可以为空,默认为21,1~255")
 	log.L.Info("⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆防区和串口设备部件映射注意⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆⬆")
+	log.L.Info("开始读取XLSX文件...")
 	show := map[int]*Map{}
 	for k, row := range rows[1:] {
 		if len(row) >= 5 {

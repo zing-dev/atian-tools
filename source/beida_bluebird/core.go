@@ -114,6 +114,14 @@ func (p *Protocol) Encode() [DataLength]byte {
 
 // Decode 解码:首尾数据为单个字节,其余位为两个单字节各自减去0x30后,高位在前低位在后合并为一个单字节
 func (p *Protocol) Decode(data [DataLength]byte) error {
+	if data[0] != CodeStart {
+		return errors.New("the first byte is not 0x82")
+	}
+
+	if data[DataLength-1] != CodeEnd {
+		return errors.New("the last byte is not 0x83")
+	}
+
 	var (
 		values      = make([]byte, 11)
 		sum    byte = 0
@@ -211,16 +219,6 @@ func (a *App) handle(data []byte) {
 		}
 		if err != nil {
 			log.L.Error("read err: ", err)
-			return
-		}
-
-		if data[0] != CodeStart {
-			log.L.Error("the first byte is not 0x82")
-			return
-		}
-
-		if data[DataLength-1] != CodeEnd {
-			log.L.Error("the last byte is not 0x83")
 			return
 		}
 		err = a.protocol.Decode(d26)
