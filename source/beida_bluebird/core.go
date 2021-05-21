@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"go.bug.st/serial"
 	"time"
 )
@@ -19,6 +20,8 @@ const (
 	// DataLength the data's length must be 26
 	DataLength = 26
 
+	// PartTypeManual 手动
+	PartTypeManual byte = 11
 	// PartTypeIO 输入输出模块
 	PartTypeIO byte = 13
 	// PartTypeSmokeSensation 感烟
@@ -67,6 +70,10 @@ type Protocol struct {
 	Hour       byte //时间时
 	Minute     byte //时间分
 	Second     byte //时间秒
+}
+
+func (p *Protocol) String() string {
+	return fmt.Sprintf("Protocol[ %d %d %d %d %d %s ]", p.Cmd, p.Controller, p.Loop, p.Part, p.PartType, p.DateTime().Format("2006-01-02 15:04:05"))
 }
 
 func (p *Protocol) IsCmdAlarm() bool {
@@ -208,11 +215,11 @@ func (a *App) read() {
 //handle data from serial
 func (a *App) handle(data []byte) {
 	a.cache.Write(data)
-
 	//起始符 报警命令 控制器号 回路号 部位号 部件类型 时间年 时间月 时间日 时间时 时间分 时间秒 累加和 结束符
 	d26 := [DataLength]byte{}
 	for a.cache.Len() >= DataLength {
-		n, err := a.cache.Read(d26[:])
+		data := make([]byte, DataLength)
+		n, err := a.cache.Read(data)
 		if n < DataLength {
 			log.L.Error("get data's length is not 26")
 			return
@@ -221,6 +228,7 @@ func (a *App) handle(data []byte) {
 			log.L.Error("read err: ", err)
 			return
 		}
+		copy(d26[:], data)
 		err = a.protocol.Decode(d26)
 		if err != nil {
 			log.L.Error("decode the data err: ", err)
