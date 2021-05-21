@@ -101,23 +101,24 @@ func main() {
 					Part:       protocol.Part,
 					PartType:   protocol.PartType,
 				}
-				m = sensation.Maps.Get(m.Key())
-				if m == nil {
+				list := sensation.Maps.Get(m.Key())
+				if list == nil {
 					log.L.Error(fmt.Sprintf("未找到当前的报警防区[控制器号 %d,回路号 %d,部位号 %d,部件类型 %d]", m.Controller, m.Loop, m.Part, m.PartType))
 					continue
 				}
-
 				if protocol.IsCmdAlarm() {
-					log.L.Warn("发生报警: ", m.String())
-					response, err := app.service.Send(nandu.Request{
-						LocationCode: m.Name,
-						Status:       nandu.CodeAlarm,
-					})
-					if err != nil {
-						log.L.Error(fmt.Sprintf("发送报警失败: %s", err))
-						return
+					for _, item := range list {
+						log.L.Warn("发生报警: ", item.String())
+						response, err := app.service.Send(nandu.Request{
+							LocationCode: item.Name,
+							Status:       nandu.CodeAlarm,
+						})
+						if err != nil {
+							log.L.Error(fmt.Sprintf("发送报警失败: %s", err))
+							return
+						}
+						log.L.Info("报警结果: ", response.String())
 					}
-					log.L.Info("报警结果: ", response.String())
 				}
 			}
 		}

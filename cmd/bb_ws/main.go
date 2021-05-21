@@ -6,7 +6,6 @@ import (
 	"atian.tools/protocol/soap/q5"
 	"atian.tools/source/beida_bluebird"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/hooklift/gowsdl/soap"
 	"net/url"
@@ -103,40 +102,41 @@ func main() {
 					Part:       protocol.Part,
 					PartType:   protocol.PartType,
 				}
-				m = sensation.Maps.Get(m.Key())
-				if m == nil {
+				list := sensation.Maps.Get(m.Key())
+				if list == nil {
 					log.L.Error(fmt.Sprintf("未找到当前的报警防区[控制器号 %d,回路号 %d,部位号 %d,部件类型 %d]", m.Controller, m.Loop, m.Part, m.PartType))
 					continue
 				}
 
-				label, _ := json.Marshal(map[string]string{"name": m.Name})
-				if protocol.IsCmdFailure() {
-					response, err := app.service.DeviceWarn(&q5.DeviceWarn{
-						LocCode:     m.Code,
-						WarnContext: string(label),
-					})
-					if err != nil {
-						log.L.Error("FireWarn err: ", err)
-						continue
+				for _, item := range list {
+					if protocol.IsCmdFailure() {
+						response, err := app.service.DeviceWarn(&q5.DeviceWarn{
+							LocCode:     item.Code,
+							WarnContext: item.String(),
+						})
+						if err != nil {
+							log.L.Error("FireWarn err: ", err)
+							continue
+						}
+
+						if response.DeviceWarnResult {
+							continue
+						}
 					}
 
-					if response.DeviceWarnResult {
-						continue
-					}
-				}
+					if protocol.IsCmdAlarm() {
+						response, err := app.service.FireWarn(&q5.FireWarn{
+							LocCode:     m.Code,
+							WarnContext: item.String(),
+						})
+						if err != nil {
+							log.L.Error("FireWarn err: ", err)
+							continue
+						}
 
-				if protocol.IsCmdAlarm() {
-					response, err := app.service.FireWarn(&q5.FireWarn{
-						LocCode:     m.Code,
-						WarnContext: string(label),
-					})
-					if err != nil {
-						log.L.Error("FireWarn err: ", err)
-						continue
-					}
-
-					if response.FireWarnResult {
-						continue
+						if response.FireWarnResult {
+							continue
+						}
 					}
 				}
 			}

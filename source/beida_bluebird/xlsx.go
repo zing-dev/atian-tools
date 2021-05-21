@@ -21,7 +21,7 @@ func (m *Map) String() string {
 	return fmt.Sprintf("Id:%d,防区名:%s,防区编码:%s,控制器号:%d,回路号:%d,部位号:%d,部件类型:%d", m.Id, m.Name, m.Code, m.Controller, m.Loop, m.Part, m.PartType)
 }
 
-type Maps map[uint32]*Map
+type Maps map[uint32][]*Map
 
 // Key Controller PartType Loop Part
 // 00000000 00000000 00000000 00000000
@@ -30,7 +30,7 @@ func (m *Map) Key() uint32 {
 	return m.Id
 }
 
-func (m Maps) Get(index uint32) *Map {
+func (m Maps) Get(index uint32) []*Map {
 	if v, ok := m[index]; ok {
 		return v
 	}
@@ -92,7 +92,7 @@ func (m Maps) Load(filename string) {
 				Part:       byte(part),
 				PartType:   byte(partType),
 			}
-			m[item.Key()] = item
+			m[item.Key()] = append(m[item.Key()], item)
 			if k == 0 || k == len(rows)/3 || k == len(rows)-2 {
 				show[k] = item
 			}
