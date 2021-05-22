@@ -21,26 +21,6 @@ const (
 
 var L logrus.Logger
 
-//func I(arg ...interface{}) {
-//	L.Info(arg)
-//}
-//
-//func W(arg ...interface{}) {
-//	L.Warn(arg)
-//}
-//
-//func E(arg ...interface{}) {
-//	L.Error(arg)
-//}
-//
-//func F(arg ...interface{}) {
-//	L.Fatal(arg)
-//}
-//
-//func P(arg ...interface{}) {
-//	L.Panic(arg)
-//}
-
 func init() {
 	//控制台logger
 	L = logrus.Logger{

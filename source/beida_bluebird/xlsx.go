@@ -2,6 +2,7 @@ package beida_bluebird
 
 import (
 	"atian.tools/log"
+	"encoding/json"
 	"fmt"
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"strconv"
@@ -18,7 +19,12 @@ type Map struct {
 }
 
 func (m *Map) String() string {
-	return fmt.Sprintf("Id:%d,防区名:%s,防区编码:%s,控制器号:%d,回路号:%d,部位号:%d,部件类型:%d", m.Id, m.Name, m.Code, m.Controller, m.Loop, m.Part, m.PartType)
+	return fmt.Sprintf("Id: %d ,防区名: %s ,防区编码: %s ,控制器号: %d ,回路号: %d ,部位号: %d ,部件类型: %d ", m.Id, m.Name, m.Code, m.Controller, m.Loop, m.Part, m.PartType)
+}
+
+func (m *Map) JSON() string {
+	data, _ := json.Marshal(m)
+	return string(data)
 }
 
 type Maps map[uint32][]*Map
