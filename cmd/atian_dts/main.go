@@ -4,6 +4,7 @@ import (
 	"atian.tools/source/atian/dts"
 	"context"
 	"fmt"
+	"time"
 )
 
 func main() {
@@ -11,8 +12,17 @@ func main() {
 		EnableWarehouse: false,
 		EnableRelay:     false,
 		ChannelNum:      4,
-		Host:            "192.168.0.86",
+		Host:            "192.168.0.215",
 	})
-	alarm := app.RecAlarm()
-	fmt.Println(alarm)
+	app.Run()
+	for {
+		select {
+		case temp := <-app.ChanZonesTemp:
+			fmt.Println(temp.JSON())
+		case alarm := <-app.ChanZonesAlarm:
+			fmt.Println(alarm)
+		default:
+			time.Sleep(time.Second)
+		}
+	}
 }

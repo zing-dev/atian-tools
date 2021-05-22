@@ -26,19 +26,23 @@ type App struct {
 	Client *dtssdk.Client
 	config Config
 
-	alarms chan []ZoneAlarm
-	Zones  map[uint]*Zone
+	ChanZonesTemp  chan ZonesTemp
+	ChanZonesAlarm chan ZonesAlarm
+	Zones          map[uint]*Zone
 
-	locker *sync.RWMutex
+	locker sync.Mutex
 }
 
 func New(ctx context.Context, config Config) *App {
 	ctx, cancel := context.WithCancel(ctx)
 	return &App{
-		ctx:    ctx,
-		cancel: cancel,
-		config: config,
-		locker: new(sync.RWMutex),
+		ctx:            ctx,
+		cancel:         cancel,
+		config:         config,
+		ChanZonesTemp:  make(chan ZonesTemp, 10),
+		ChanZonesAlarm: make(chan ZonesAlarm, 10),
+		Zones:          map[uint]*Zone{},
+		locker:         sync.Mutex{},
 	}
 }
 
@@ -46,13 +50,39 @@ func (a *App) Run() {
 	a.Client = dtssdk.NewDTSClient(a.config.Host)
 	a.Client.CallConnected(func(s string) {
 		log.L.Info(fmt.Sprintf("主机为 %s 的dts连接成功", s))
-		go a.GetZones()
-		err := a.Client.CallZoneAlarmNotify(func(notify *model.ZoneAlarmNotify, err error) {
+		go a.GetSyncZones()
+		err := a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
+			zones := make([]ZoneTemp, len(notify.GetZones()))
+			for i, zone := range notify.GetZones() {
+				zones[i] = ZoneTemp{
+					Zone: a.GetZone(uint(zone.ID)),
+					Temperature: Temperature{
+						Max: zone.MaxTemperature,
+						Avg: zone.AverageTemperature,
+						Min: zone.MinTemperature,
+					},
+				}
+			}
+			select {
+			case a.ChanZonesTemp <- ZonesTemp{
+				DeviceId:  notify.DeviceID,
+				Host:      s,
+				CreatedAt: TimeLocal{time.Unix(notify.Timestamp, 0)},
+				Zones:     zones,
+			}:
+			default:
+			}
+		})
+		if err != nil {
+			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受temp回调失败: %s", s, err))
+		}
+		err = a.Client.CallZoneAlarmNotify(func(notify *model.ZoneAlarmNotify, err error) {
+			log.L.Warn(fmt.Sprintf("主机为 %s 的dts had alarm", s))
 			alarms := make([]ZoneAlarm, len(notify.GetZones()))
 			for k, v := range notify.GetZones() {
 				zone := a.GetZone(uint(v.ID))
-				if zone != nil {
-					log.L.Error()
+				if zone == nil {
+					log.L.Error("no zone find ", v.ID)
 					continue
 				}
 				alarms[k] = ZoneAlarm{
@@ -63,12 +93,16 @@ func (a *App) Run() {
 						Min: v.MinTemperature,
 					},
 					Location:  v.AlarmLoc,
-					AlarmAt:   TimeLocal{time.Unix(notify.Timestamp, 0)},
 					AlarmType: v.AlarmType,
 				}
 			}
 			select {
-			case a.alarms <- alarms:
+			case a.ChanZonesAlarm <- ZonesAlarm{
+				Zones:     alarms,
+				DeviceId:  "",
+				Host:      s,
+				CreatedAt: TimeLocal{time.Unix(notify.Timestamp, 0)},
+			}:
 			default:
 			}
 		})
@@ -80,13 +114,17 @@ func (a *App) Run() {
 }
 
 func (a *App) GetZone(id uint) *Zone {
-	a.locker.RLocker()
-	defer a.locker.RUnlock()
-	return a.Zones[id]
+	return a.GetZones()[id]
 }
 
-func (a *App) GetZones() {
-	for i := byte(1); i < a.config.ChannelNum; i++ {
+func (a *App) GetZones() map[uint]*Zone {
+	a.locker.Lock()
+	defer a.locker.Unlock()
+	return a.Zones
+}
+
+func (a *App) GetSyncZones() {
+	for i := byte(1); i <= a.config.ChannelNum; i++ {
 		response, err := a.Client.GetDefenceZone(int(i), "")
 		if err != nil {
 			log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区失败: %s", a.config.Host, i, err))
@@ -97,10 +135,10 @@ func (a *App) GetZones() {
 			continue
 		}
 		a.locker.Lock()
-		for _, v := range response.Rows {
-			v := v
+		for k := range response.Rows {
+			v := response.Rows[k]
 			id := uint(v.ID)
-			a.Zones[uint(v.ID)] = &Zone{
+			a.Zones[id] = &Zone{
 				Id:        id,
 				Name:      v.ZoneName,
 				ChannelId: byte(v.ChannelID),
@@ -151,9 +189,6 @@ func (a *App) GetZones() {
 			}
 		}
 		a.locker.Unlock()
+		log.L.Info(fmt.Sprintf("获取主机 %s 通道 %d 防区", a.config.Host, i))
 	}
-}
-
-func (a *App) RecAlarm() []ZoneAlarm {
-	return <-a.alarms
 }

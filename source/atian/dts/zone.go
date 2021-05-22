@@ -3,6 +3,7 @@ package dts
 import (
 	"atian.tools/log"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
 	"strings"
@@ -92,7 +93,7 @@ type ZonesAlarm struct {
 	Zones     []ZoneAlarm `json:"zones"`
 	DeviceId  string      `json:"device_id"`
 	Host      string      `json:"host,omitempty"`
-	CreatedAt string      `json:"created_at"`
+	CreatedAt TimeLocal   `json:"created_at"`
 }
 
 type ZoneExtend struct {
@@ -119,6 +120,13 @@ type Zone struct {
 	ZoneExtend
 }
 
+func (z *Zone) JSON() string {
+	data, _ := json.Marshal(z)
+	return string(data)
+}
+
+func (z *Zone) String() string { return z.Name }
+
 type Zones struct {
 	ChannelId int32  `json:"channel_id,omitempty"`
 	Host      string `json:"host,omitempty"`
@@ -126,14 +134,19 @@ type Zones struct {
 }
 
 type ZoneTemp struct {
-	Zone
+	*Zone
 	Temperature
+}
+
+func (t *ZonesTemp) JSON() string {
+	data, _ := json.Marshal(t)
+	return string(data)
 }
 
 type ZonesTemp struct {
 	DeviceId  string     `json:"device_id"`
 	Host      string     `json:"host,omitempty"`
-	CreatedAt string     `json:"created_at"`
+	CreatedAt TimeLocal  `json:"created_at"`
 	Zones     []ZoneTemp `json:"zones"`
 }
 
