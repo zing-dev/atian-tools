@@ -169,7 +169,7 @@ func New(ctx context.Context, config *Config) *App {
 		cancel:       cancel,
 		Name:         "JBF293K 接口卡RS232/485",
 		Version:      "1.3",
-		Maps:         map[uint32]*Map{},
+		Maps:         map[uint32][]*Map{},
 		cache:        new(bytes.Buffer),
 		config:       config,
 		protocol:     new(Protocol),
