@@ -19,6 +19,10 @@ func main() {
 		select {
 		case temp := <-app.ChanZonesTemp:
 			fmt.Println(temp.JSON())
+		case sign := <-app.ChanChannelSignal:
+			fmt.Println(sign)
+		case event := <-app.ChanChannelEvent:
+			fmt.Println(event)
 		case alarm := <-app.ChanZonesAlarm:
 			fmt.Println(alarm)
 		default:

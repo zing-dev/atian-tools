@@ -3,6 +3,7 @@ package dts
 import (
 	"atian.tools/log"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
@@ -26,9 +27,11 @@ type App struct {
 	Client *dtssdk.Client
 	config Config
 
-	ChanZonesTemp  chan ZonesTemp
-	ChanZonesAlarm chan ZonesAlarm
-	Zones          map[uint]*Zone
+	ChanZonesTemp     chan ZonesTemp
+	ChanChannelSignal chan ChannelSignal
+	ChanChannelEvent  chan ChannelEvent
+	ChanZonesAlarm    chan ZonesAlarm
+	Zones             map[uint]*Zone
 
 	locker sync.Mutex
 }
@@ -36,13 +39,15 @@ type App struct {
 func New(ctx context.Context, config Config) *App {
 	ctx, cancel := context.WithCancel(ctx)
 	return &App{
-		ctx:            ctx,
-		cancel:         cancel,
-		config:         config,
-		ChanZonesTemp:  make(chan ZonesTemp, 10),
-		ChanZonesAlarm: make(chan ZonesAlarm, 10),
-		Zones:          map[uint]*Zone{},
-		locker:         sync.Mutex{},
+		ctx:               ctx,
+		cancel:            cancel,
+		config:            config,
+		ChanZonesTemp:     make(chan ZonesTemp, 10),
+		ChanChannelSignal: make(chan ChannelSignal, 10),
+		ChanChannelEvent:  make(chan ChannelEvent, 10),
+		ChanZonesAlarm:    make(chan ZonesAlarm, 10),
+		Zones:             map[uint]*Zone{},
+		locker:            sync.Mutex{},
 	}
 }
 
@@ -74,10 +79,29 @@ func (a *App) Run() {
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受temp回调失败: %s", s, err))
+			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受温度回调失败: %s", s, err))
 		}
+
+		err = a.Client.CallTempSignalNotify(func(notify *model.TempSignalNotify, err error) {
+			signal := ChannelSignal{
+				DeviceId:   notify.GetDeviceID(),
+				ChannelId:  notify.GetChannelID(),
+				RealLength: notify.GetRealLength(),
+				Host:       s,
+				Signal:     notify.GetSignal(),
+				CreatedAt:  TimeLocal{time.Unix(notify.GetTimestamp(), 0)},
+			}
+			select {
+			case a.ChanChannelSignal <- signal:
+			default:
+			}
+		})
+		if err != nil {
+			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", s, err))
+		}
+
 		err = a.Client.CallZoneAlarmNotify(func(notify *model.ZoneAlarmNotify, err error) {
-			log.L.Warn(fmt.Sprintf("主机为 %s 的dts had alarm", s))
+			log.L.Warn(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", s))
 			alarms := make([]ZoneAlarm, len(notify.GetZones()))
 			for k, v := range notify.GetZones() {
 				zone := a.GetZone(uint(v.ID))
@@ -110,6 +134,23 @@ func (a *App) Run() {
 			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受报警回调失败: %s", s, err))
 		}
 
+		err = a.Client.CallDeviceEventNotify(func(notify *model.DeviceEventNotify, err error) {
+			event := ChannelEvent{
+				DeviceId:      notify.GetDeviceID(),
+				ChannelId:     notify.GetChannelID(),
+				Host:          s,
+				EventType:     notify.GetEventType(),
+				ChannelLength: notify.GetChannelLength(),
+				CreatedAt:     TimeLocal{time.Unix(notify.GetTimestamp(), 0)},
+			}
+			select {
+			case a.ChanChannelEvent <- event:
+			default:
+			}
+		})
+		if err != nil {
+			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", s, err))
+		}
 	})
 }
 
@@ -123,72 +164,78 @@ func (a *App) GetZones() map[uint]*Zone {
 	return a.Zones
 }
 
+func (a *App) GetSyncChannelZones(channelId byte) error {
+	response, err := a.Client.GetDefenceZone(int(channelId), "")
+	if err != nil {
+		return err
+	}
+	if !response.Success {
+		return errors.New(response.ErrMsg)
+	}
+	a.locker.Lock()
+	for k := range response.Rows {
+		v := response.Rows[k]
+		id := uint(v.ID)
+		a.Zones[id] = &Zone{
+			Id:        id,
+			Name:      v.ZoneName,
+			ChannelId: byte(v.ChannelID),
+			Tag:       DecodeTags(v.Tag),
+			Start:     v.Start,
+			Finish:    v.Finish,
+			Host:      a.config.Host,
+		}
+
+		if a.config.EnableRelay {
+			//relay:A1,2,3,4,5
+			r := a.Zones[id].Tag[TagRelay]
+			if len(r) < 2 {
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签字符值至少两位,例如A1", a.config.Host, channelId, v.ZoneName))
+			} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签模式不匹配: %s, 必须如A1,2,3,4", a.config.Host, channelId, v.ZoneName, err))
+			} else {
+				a.Zones[id].Relay = Relay{r[0]: r[1:]}
+			}
+		}
+		if a.config.EnableWarehouse {
+			var (
+				row, column, layer = 0, 0, 0
+				err                error
+			)
+			row, err = strconv.Atoi(a.Zones[id].Tag[TagRow])
+			if err != nil {
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.config.Host, channelId, v.ZoneName, err))
+				continue
+			}
+			column, err = strconv.Atoi(a.Zones[id].Tag[TagColumn])
+			if err != nil {
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.config.Host, channelId, v.ZoneName, err))
+				continue
+			}
+			layer, err = strconv.Atoi(a.Zones[id].Tag[TagLayer])
+			if err != nil {
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.config.Host, channelId, v.ZoneName, err))
+				continue
+			}
+			a.Zones[id].ZoneExtend = ZoneExtend{
+				Warehouse: a.Zones[id].Tag[TagWarehouse],
+				Group:     a.Zones[id].Tag[TagGroup],
+				Row:       row,
+				Column:    column,
+				Layer:     layer,
+			}
+		}
+	}
+	a.locker.Unlock()
+	log.L.Info(fmt.Sprintf("获取主机 %s 通道 %d 防区", a.config.Host, channelId))
+	return nil
+}
+
 func (a *App) GetSyncZones() {
 	for i := byte(1); i <= a.config.ChannelNum; i++ {
-		response, err := a.Client.GetDefenceZone(int(i), "")
+		err := a.GetSyncChannelZones(i)
 		if err != nil {
 			log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区失败: %s", a.config.Host, i, err))
-			continue
 		}
-		if !response.Success {
-			log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区响应失败: %s", a.config.Host, i, response.ErrMsg))
-			continue
-		}
-		a.locker.Lock()
-		for k := range response.Rows {
-			v := response.Rows[k]
-			id := uint(v.ID)
-			a.Zones[id] = &Zone{
-				Id:        id,
-				Name:      v.ZoneName,
-				ChannelId: byte(v.ChannelID),
-				Tag:       DecodeTags(v.Tag),
-				Start:     v.Start,
-				Finish:    v.Finish,
-				Host:      a.config.Host,
-			}
-
-			if a.config.EnableRelay {
-				//relay:A1,2,3,4,5
-				r := a.Zones[id].Tag[TagRelay]
-				if len(r) < 2 {
-					log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签字符值至少两位,例如A1", a.config.Host, v.ZoneName, i))
-				} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
-					log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签模式不匹配: %s, 必须如A1,2,3,4", a.config.Host, i, v.ZoneName, err))
-				} else {
-					a.Zones[id].Relay = Relay{r[0]: r[1:]}
-				}
-			}
-			if a.config.EnableWarehouse {
-				var (
-					row, column, layer = 0, 0, 0
-					err                error
-				)
-				row, err = strconv.Atoi(a.Zones[id].Tag[TagRow])
-				if err != nil {
-					log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.config.Host, i, v.ZoneName, err))
-					continue
-				}
-				column, err = strconv.Atoi(a.Zones[id].Tag[TagColumn])
-				if err != nil {
-					log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.config.Host, i, v.ZoneName, err))
-					continue
-				}
-				layer, err = strconv.Atoi(a.Zones[id].Tag[TagLayer])
-				if err != nil {
-					log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.config.Host, i, v.ZoneName, err))
-					continue
-				}
-				a.Zones[id].ZoneExtend = ZoneExtend{
-					Warehouse: a.Zones[id].Tag[TagWarehouse],
-					Group:     a.Zones[id].Tag[TagGroup],
-					Row:       row,
-					Column:    column,
-					Layer:     layer,
-				}
-			}
-		}
-		a.locker.Unlock()
-		log.L.Info(fmt.Sprintf("获取主机 %s 通道 %d 防区", a.config.Host, i))
 	}
 }
