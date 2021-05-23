@@ -1,8 +1,8 @@
 package cfg
 
 import (
-	"atian.tools/log"
 	"fmt"
+	"github.com/zing-dev/atian-tools/log"
 	"gopkg.in/ini.v1"
 	"os"
 	"sync"

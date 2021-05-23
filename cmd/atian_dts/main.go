@@ -1,9 +1,9 @@
 package main
 
 import (
-	"atian.tools/source/atian/dts"
 	"context"
 	"fmt"
+	"github.com/zing-dev/atian-tools/source/atian/dts"
 	"time"
 )
 

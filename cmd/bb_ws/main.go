@@ -1,13 +1,13 @@
 package main
 
 import (
-	"atian.tools/cfg"
-	"atian.tools/log"
-	"atian.tools/protocol/soap/q5"
-	"atian.tools/source/beida_bluebird"
 	"context"
 	"fmt"
 	"github.com/hooklift/gowsdl/soap"
+	"github.com/zing-dev/atian-tools/cfg"
+	"github.com/zing-dev/atian-tools/log"
+	"github.com/zing-dev/atian-tools/protocol/soap/q5"
+	"github.com/zing-dev/atian-tools/source/beida_bluebird"
 	"net/url"
 	"os"
 	"time"

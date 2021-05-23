@@ -1,11 +1,11 @@
 package dts
 
 import (
-	"atian.tools/log"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
+	"github.com/zing-dev/atian-tools/log"
 	"strings"
 	"time"
 )

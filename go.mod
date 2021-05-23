@@ -1,4 +1,4 @@
-module atian.tools
+module github.com/zing-dev/atian-tools
 
 go 1.16
 

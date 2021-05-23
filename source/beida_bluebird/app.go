@@ -1,11 +1,11 @@
 package beida_bluebird
 
 import (
-	"atian.tools/log"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/zing-dev/atian-tools/log"
 	"go.bug.st/serial"
 	"time"
 )

@@ -1,12 +1,12 @@
 package main
 
 import (
-	"atian.tools/cfg"
-	"atian.tools/log"
-	"atian.tools/protocol/http/nandu"
-	"atian.tools/source/beida_bluebird"
 	"context"
 	"fmt"
+	"github.com/zing-dev/atian-tools/cfg"
+	"github.com/zing-dev/atian-tools/log"
+	"github.com/zing-dev/atian-tools/protocol/http/nandu"
+	"github.com/zing-dev/atian-tools/source/beida_bluebird"
 	"net/url"
 	"os"
 )

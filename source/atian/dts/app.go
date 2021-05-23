@@ -1,12 +1,12 @@
 package dts
 
 import (
-	"atian.tools/log"
 	"context"
 	"errors"
 	"fmt"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
+	"github.com/zing-dev/atian-tools/log"
 	"regexp"
 	"strconv"
 	"sync"
