@@ -22,10 +22,10 @@ type Config struct {
 
 type App struct {
 	Context context.Context
-	cancel  context.CancelFunc
+	Cancel  context.CancelFunc
 
 	Client *dtssdk.Client
-	config Config
+	Config Config
 
 	ChanZonesTemp     chan ZonesTemp
 	ChanChannelSignal chan ChannelSignal
@@ -40,8 +40,8 @@ func New(ctx context.Context, config Config) *App {
 	ctx, cancel := context.WithCancel(ctx)
 	return &App{
 		Context:           ctx,
-		cancel:            cancel,
-		config:            config,
+		Cancel:            cancel,
+		Config:            config,
 		ChanZonesTemp:     make(chan ZonesTemp, 10),
 		ChanChannelSignal: make(chan ChannelSignal, 10),
 		ChanChannelEvent:  make(chan ChannelEvent, 10),
@@ -52,7 +52,7 @@ func New(ctx context.Context, config Config) *App {
 }
 
 func (a *App) Run() {
-	a.Client = dtssdk.NewDTSClient(a.config.Host)
+	a.Client = dtssdk.NewDTSClient(a.Config.Host)
 	a.Client.CallConnected(func(s string) {
 		log.L.Info(fmt.Sprintf("主机为 %s 的dts连接成功", s))
 		go a.GetSyncZones()
@@ -152,6 +152,10 @@ func (a *App) Run() {
 			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", s, err))
 		}
 	})
+
+	a.Client.CallDisconnected(func(s string) {
+		log.L.Warn(fmt.Sprintf("主机为 %s 的dts断开连接", s))
+	})
 }
 
 func (a *App) GetZone(id uint) *Zone {
@@ -181,41 +185,44 @@ func (a *App) GetSyncChannelZones(channelId byte) error {
 			Id:        id,
 			Name:      v.ZoneName,
 			ChannelId: byte(v.ChannelID),
-			Tag:       DecodeTags(v.Tag),
 			Start:     v.Start,
 			Finish:    v.Finish,
-			Host:      a.config.Host,
+			Host:      a.Config.Host,
 		}
-
-		if a.config.EnableRelay {
+		if v.Tag != "" {
+			a.Zones[id].Tag = DecodeTags(v.Tag)
+		}
+		if a.Config.EnableRelay {
 			//relay:A1,2,3,4,5
-			r := a.Zones[id].Tag[TagRelay]
-			if len(r) < 2 {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签字符值至少两位,例如A1", a.config.Host, channelId, v.ZoneName))
+			r, ok := a.Zones[id].Tag[TagRelay]
+			if !ok {
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签不存在", a.Config.Host, channelId, v.ZoneName))
+			} else if len(r) < 2 {
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签字符值至少两位,例如A1", a.Config.Host, channelId, v.ZoneName))
 			} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签模式不匹配: %s, 必须如A1,2,3,4", a.config.Host, channelId, v.ZoneName, err))
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签模式不匹配: %s, 必须如A1,2,3,4", a.Config.Host, channelId, v.ZoneName, err))
 			} else {
 				a.Zones[id].Relay = Relay{r[0]: r[1:]}
 			}
 		}
-		if a.config.EnableWarehouse {
+		if a.Config.EnableWarehouse {
 			var (
 				row, column, layer = 0, 0, 0
 				err                error
 			)
 			row, err = strconv.Atoi(a.Zones[id].Tag[TagRow])
 			if err != nil {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.config.Host, channelId, v.ZoneName, err))
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
 			}
 			column, err = strconv.Atoi(a.Zones[id].Tag[TagColumn])
 			if err != nil {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.config.Host, channelId, v.ZoneName, err))
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
 			}
 			layer, err = strconv.Atoi(a.Zones[id].Tag[TagLayer])
 			if err != nil {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.config.Host, channelId, v.ZoneName, err))
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
 			}
 			a.Zones[id].ZoneExtend = ZoneExtend{
@@ -228,16 +235,16 @@ func (a *App) GetSyncChannelZones(channelId byte) error {
 		}
 	}
 	a.locker.Unlock()
-	log.L.Info(fmt.Sprintf("获取主机 %s 通道 %d 防区", a.config.Host, channelId))
+	log.L.Info(fmt.Sprintf("获取主机 %s 通道 %d 防区", a.Config.Host, channelId))
 	return nil
 }
 
 // GetSyncZones 同步获取所有防区
 func (a *App) GetSyncZones() {
-	for i := byte(1); i <= a.config.ChannelNum; i++ {
+	for i := byte(1); i <= a.Config.ChannelNum; i++ {
 		err := a.GetSyncChannelZones(i)
 		if err != nil {
-			log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区失败: %s", a.config.Host, i, err))
+			log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区失败: %s", a.Config.Host, i, err))
 		}
 	}
 }

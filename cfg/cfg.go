@@ -15,10 +15,6 @@ var (
 	c *Config
 )
 
-type Serial struct {
-	Port string
-}
-
 type Config struct {
 	filename string
 	File     *ini.File

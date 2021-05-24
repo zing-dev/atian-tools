@@ -108,13 +108,18 @@ const (
 	TagSeparator      = ";"
 	TagValueSeparator = "="
 
-	TagWarehouse = "warehouse"
-	TagGroup     = "group"
-	TagRow       = "row"
-	TagColumn    = "column"
-	TagLayer     = "layer"
+	// TagWarehouse 仓库
+	TagWarehouse = "warehouse" //示例 warehouse:w01
+	// TagGroup 组
+	TagGroup = "group" //示例 group:g001
+	// TagRow 行
+	TagRow = "row" //示例 row:1
+	// TagColumn 列
+	TagColumn = "column" //示例 column:1
+	// TagLayer 层
+	TagLayer = "layer" //示例 layer:1
 
-	TagRelay = "relay"
+	TagRelay = "relay" //示例 relay:A1,2,3,4
 )
 
 type (

@@ -215,10 +215,9 @@ func (a *App) read() {
 //handle data from serial
 func (a *App) handle(data []byte) {
 	a.cache.Write(data)
-	//起始符 报警命令 控制器号 回路号 部位号 部件类型 时间年 时间月 时间日 时间时 时间分 时间秒 累加和 结束符
 	d26 := [DataLength]byte{}
+	data = make([]byte, DataLength)
 	for a.cache.Len() >= DataLength {
-		data := make([]byte, DataLength)
 		n, err := a.cache.Read(data)
 		if n < DataLength {
 			log.L.Error("get data's length is not 26")
