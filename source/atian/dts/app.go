@@ -2,16 +2,27 @@ package dts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
+	"github.com/gorilla/websocket"
+	"github.com/kataras/neffos"
+	"github.com/robfig/cron/v3"
 	"github.com/zing-dev/atian-tools/log"
+	"github.com/zing-dev/atian-tools/source/device"
 	"regexp"
 	"strconv"
 	"sync"
 	"time"
 )
+
+type WebSocketResponse struct {
+	Success bool        `json:"success"`
+	Type    string      `json:"type"`
+	Data    interface{} `json:"data"`
+}
 
 type Config struct {
 	EnableWarehouse bool
@@ -53,6 +64,22 @@ func New(ctx context.Context, config Config) *App {
 		Zones:             map[uint]*Zone{},
 		locker:            sync.Mutex{},
 	}
+}
+
+func (a *App) GetId() string {
+	return a.Config.Host
+}
+
+func (a *App) GetType() device.Type {
+	return device.TypeDTS
+}
+
+func (a *App) GetStatus() device.StatusType {
+	return device.StatusType(a.Status())
+}
+
+func (a *App) Cron(cron *cron.Cron) {
+
 }
 
 func (a *App) Run() {
@@ -182,6 +209,42 @@ func (a *App) call() {
 			continue
 		}
 	}
+}
+
+func (a *App) WriteToWebsockets(t string, data interface{}, server *neffos.Server) {
+	body, err := json.Marshal(WebSocketResponse{
+		Success: true,
+		Type:    t,
+		Data:    data,
+	})
+	if err != nil {
+		log.L.Error()
+		return
+	}
+	for _, conn := range server.GetConnections() {
+		ok := conn.Write(neffos.Message{
+			Body:     body,
+			IsNative: true,
+		})
+		if !ok {
+			log.L.Error("write not ok")
+			continue
+		}
+	}
+}
+
+func (a *App) WriteToWebsocket(data interface{}, connections ...*websocket.Conn) {
+	for _, conn := range connections {
+		err := conn.WriteJSON(data)
+		if err != nil {
+			log.L.Error(err)
+			continue
+		}
+	}
+}
+
+func (a *App) Close() {
+	a.Cancel()
 }
 
 func (a *App) Status() Status {

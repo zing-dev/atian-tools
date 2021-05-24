@@ -9,6 +9,7 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/hooklift/gowsdl v0.4.0
 	github.com/jonboulle/clockwork v0.2.2 // indirect
+	github.com/kataras/neffos v0.0.18
 	github.com/lestrrat-go/file-rotatelogs v2.4.0+incompatible
 	github.com/lestrrat-go/strftime v1.0.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -18,5 +19,6 @@ require (
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	go.bug.st/serial v1.1.3
 	golang.org/x/sys v0.0.0-20210420072515-93ed5bcd2bfe // indirect
+	golang.org/x/tools v0.0.0-20190328211700-ab21143f2384
 	gopkg.in/ini.v1 v1.62.0
 )

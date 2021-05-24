@@ -50,7 +50,6 @@ type (
 		GetType() Type
 
 		GetStatus() StatusType
-		Cron(*cron.Cron)
 		Run()
 
 		Close()
@@ -67,7 +66,7 @@ type Manger struct {
 	Cancel  context.CancelFunc
 	devices sync.Map
 	locker  sync.Mutex
-	cron    *cron.Cron
+	Cron    *cron.Cron
 
 	listeners sync.Map
 	event     chan EventListener
@@ -81,7 +80,7 @@ func NewManger(ctx context.Context) *Manger {
 			Cancel:    cancel,
 			devices:   sync.Map{},
 			locker:    sync.Mutex{},
-			cron:      cron.New(cron.WithSeconds()),
+			Cron:      cron.New(cron.WithSeconds()),
 			listeners: sync.Map{},
 			event:     make(chan EventListener, 30),
 		}
@@ -98,7 +97,6 @@ func (m *Manger) RegisterEvent(eventType EventType, lister CallListener) {
 func (m *Manger) Adds(devices ...Device) {
 	for _, device := range devices {
 		m.devices.Store(device.GetId(), device)
-		device.Cron(m.cron)
 		m.omit(EventListener{
 			Device:    device,
 			EventType: EventAdd,
@@ -108,7 +106,6 @@ func (m *Manger) Adds(devices ...Device) {
 
 func (m *Manger) Add(device Device) {
 	m.devices.Store(device.GetId(), device)
-	device.Cron(m.cron)
 	m.omit(EventListener{
 		Device:    device,
 		EventType: EventAdd,
@@ -117,7 +114,6 @@ func (m *Manger) Add(device Device) {
 
 func (m *Manger) Update(device Device) {
 	m.devices.Store(device.GetId(), device)
-	device.Cron(m.cron)
 	m.omit(EventListener{
 		Device:    device,
 		EventType: EventUpdate,
@@ -141,6 +137,13 @@ func (m *Manger) WriteToWebsocket(connections ...*websocket.Conn) {
 			continue
 		}
 	}
+}
+
+func (m *Manger) GetDevice(id string) Device {
+	if value, ok := m.devices.Load(id); ok {
+		return value.(Device)
+	}
+	return nil
 }
 
 func (m *Manger) Range() []Device {
