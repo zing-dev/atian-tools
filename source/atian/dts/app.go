@@ -27,6 +27,9 @@ type App struct {
 	Client *dtssdk.Client
 	Config Config
 
+	status     Status
+	ChanStatus chan Status
+
 	ChanZonesTemp     chan ZonesTemp
 	ChanChannelSignal chan ChannelSignal
 	ChanChannelEvent  chan ChannelEvent
@@ -42,6 +45,7 @@ func New(ctx context.Context, config Config) *App {
 		Context:           ctx,
 		Cancel:            cancel,
 		Config:            config,
+		ChanStatus:        make(chan Status, 0),
 		ChanZonesTemp:     make(chan ZonesTemp, 10),
 		ChanChannelSignal: make(chan ChannelSignal, 10),
 		ChanChannelEvent:  make(chan ChannelEvent, 10),
@@ -55,8 +59,26 @@ func (a *App) Run() {
 	a.Client = dtssdk.NewDTSClient(a.Config.Host)
 	a.Client.CallConnected(func(s string) {
 		log.L.Info(fmt.Sprintf("主机为 %s 的dts连接成功", s))
+		a.setStatus(StatusOnline)
 		go a.GetSyncZones()
-		err := a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
+		a.call()
+	})
+
+	a.Client.OnTimeout(func(s string) {
+		log.L.Warn(fmt.Sprintf("主机为 %s 的dts连接超时", s))
+		a.setStatus(StatusOff)
+	})
+
+	a.Client.CallDisconnected(func(s string) {
+		log.L.Warn(fmt.Sprintf("主机为 %s 的dts断开连接", s))
+		a.setStatus(StatusOff)
+	})
+}
+
+func (a *App) call() {
+	var err = errors.New("")
+	for err != nil {
+		err = a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
 			zones := make([]ZoneTemp, len(notify.GetZones()))
 			for i, zone := range notify.GetZones() {
 				zones[i] = ZoneTemp{
@@ -71,7 +93,7 @@ func (a *App) Run() {
 			select {
 			case a.ChanZonesTemp <- ZonesTemp{
 				DeviceId:  notify.GetDeviceID(),
-				Host:      s,
+				Host:      a.Config.Host,
 				CreatedAt: TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 				Zones:     zones,
 			}:
@@ -79,7 +101,9 @@ func (a *App) Run() {
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受温度回调失败: %s", s, err))
+			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受温度回调失败: %s", a.Config.Host, err))
+			time.Sleep(time.Second / 10)
+			continue
 		}
 
 		err = a.Client.CallTempSignalNotify(func(notify *model.TempSignalNotify, err error) {
@@ -87,7 +111,7 @@ func (a *App) Run() {
 				DeviceId:   notify.GetDeviceID(),
 				ChannelId:  notify.GetChannelID(),
 				RealLength: notify.GetRealLength(),
-				Host:       s,
+				Host:       a.Config.Host,
 				Signal:     notify.GetSignal(),
 				CreatedAt:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 			}
@@ -97,11 +121,13 @@ func (a *App) Run() {
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", s, err))
+			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err))
+			time.Sleep(time.Second / 10)
+			continue
 		}
 
 		err = a.Client.CallZoneAlarmNotify(func(notify *model.ZoneAlarmNotify, err error) {
-			log.L.Warn(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", s))
+			log.L.Warn(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", a.Config.Host))
 			alarms := make([]ZoneAlarm, len(notify.GetZones()))
 			for k, v := range notify.GetZones() {
 				zone := a.GetZone(uint(v.GetID()))
@@ -124,21 +150,23 @@ func (a *App) Run() {
 			case a.ChanZonesAlarm <- ZonesAlarm{
 				Zones:     alarms,
 				DeviceId:  notify.GetDeviceID(),
-				Host:      s,
+				Host:      a.Config.Host,
 				CreatedAt: &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 			}:
 			default:
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受报警回调失败: %s", s, err))
+			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受报警回调失败: %s", a.Config.Host, err))
+			time.Sleep(time.Second / 10)
+			continue
 		}
 
 		err = a.Client.CallDeviceEventNotify(func(notify *model.DeviceEventNotify, err error) {
 			event := ChannelEvent{
 				DeviceId:      notify.GetDeviceID(),
 				ChannelId:     notify.GetChannelID(),
-				Host:          s,
+				Host:          a.Config.Host,
 				EventType:     notify.GetEventType(),
 				ChannelLength: notify.GetChannelLength(),
 				CreatedAt:     &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
@@ -149,13 +177,27 @@ func (a *App) Run() {
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", s, err))
+			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err))
+			time.Sleep(time.Second / 10)
+			continue
 		}
-	})
+	}
+}
 
-	a.Client.CallDisconnected(func(s string) {
-		log.L.Warn(fmt.Sprintf("主机为 %s 的dts断开连接", s))
-	})
+func (a *App) Status() Status {
+	a.locker.Lock()
+	defer a.locker.Unlock()
+	return a.status
+}
+
+func (a *App) setStatus(s Status) {
+	a.locker.Lock()
+	a.status = s
+	a.locker.Unlock()
+	select {
+	case a.ChanStatus <- s:
+	default:
+	}
 }
 
 func (a *App) GetZone(id uint) *Zone {

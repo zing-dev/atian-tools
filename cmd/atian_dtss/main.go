@@ -29,8 +29,8 @@ func main() {
 		cancel: cancel,
 		apps:   map[string]*dts.App{},
 		configs: []dts.Config{
-			{EnableRelay: false, EnableWarehouse: false, ChannelNum: 4, Host: "192.168.0.215"},
 			{EnableRelay: false, EnableWarehouse: false, ChannelNum: 4, Host: "192.168.0.86"},
+			{EnableRelay: false, EnableWarehouse: false, ChannelNum: 4, Host: "192.168.0.215"},
 		},
 	}
 	for _, config := range core.configs {
@@ -47,6 +47,8 @@ func main() {
 					app.Client.Close()
 					fmt.Println("out")
 					return
+				case status := <-app.ChanStatus:
+					log.Println("status", status.String())
 				case temp := <-app.ChanZonesTemp:
 					log.Println("temp", temp.DeviceId)
 				case sign := <-app.ChanChannelSignal:
@@ -73,9 +75,12 @@ func main() {
 	select {
 	case <-stop:
 		log.Println("stop the word")
+		core.cancel()
+		time.Sleep(time.Second)
 		return
 	case <-core.ctx.Done():
 		log.Println("done the word")
+		time.Sleep(time.Second)
 		return
 	}
 }

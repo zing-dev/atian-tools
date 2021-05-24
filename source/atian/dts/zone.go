@@ -104,7 +104,24 @@ func GetEventTypeString(t model.FiberState) string {
 	}
 }
 
+func (s *Status) String() string {
+	switch *s {
+	case StatusOnline:
+		return "在线"
+	case StatusOff:
+		return "离线"
+	case StatusRetry:
+		return "重连"
+	}
+	return "未知状态"
+}
+
 const (
+	_ Status = iota
+	StatusOnline
+	StatusOff
+	StatusRetry
+
 	TagSeparator      = ";"
 	TagValueSeparator = "="
 
@@ -123,13 +140,17 @@ const (
 )
 
 type (
+	Status byte
+
 	TimeLocal struct {
 		time.Time
 	}
-	// Tag 标签
+	// Tag 标签 形如 k1=v1;k2=v2
+	// 标签 warehouse=w1;group=g1;row=1;column=1;layer=1;relay=A1,2,3,4,5
+	// Map {warehouse:w1,group:g1,row:1,column:1,layer:1,relay:A1,2,3,4,5}
 	Tag map[string]string
 	// Relay 继电器
-	Relay map[uint8]string
+	Relay map[uint8]string //标签 relay=A1,2,3,4,5 Map {A:1,2,3,4,5}
 
 	// Temperature 温度信息
 	Temperature struct {
