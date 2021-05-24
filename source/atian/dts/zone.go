@@ -3,16 +3,15 @@ package dts
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
 	"github.com/zing-dev/atian-tools/log"
+	"math"
+	"sort"
 	"strings"
 	"time"
 )
-
-type TimeLocal struct {
-	time.Time
-}
 
 func (t TimeLocal) MarshalJSON() ([]byte, error) {
 	return []byte(t.Format(`"2006-01-02 15:04:05"`)), nil
@@ -119,6 +118,9 @@ const (
 )
 
 type (
+	TimeLocal struct {
+		time.Time
+	}
 	// Tag 标签
 	Tag map[string]string
 	// Relay 继电器
@@ -154,17 +156,31 @@ type (
 		Layer     int    `json:"layer,omitempty"`
 	}
 
-	// Zones 主机下的防区集合
-	Zones struct {
+	// Zones 防区集合
+	Zones []*Zone
+
+	// SortZones 排序防区集合
+	SortZones Zones
+
+	//lessFunc 比较函数
+	lessFunc func(p1, p2 *Zone) bool
+
+	multiSorter struct {
+		zones SortZones
+		less  []lessFunc
+	}
+
+	// ChannelZones  主机下的防区集合
+	ChannelZones struct {
 		ChannelId int32  `json:"channel_id,omitempty"`
 		Host      string `json:"host,omitempty"`
-		Zones     []*Zone
+		Zones     Zones
 	}
 
 	// ZoneTemp 防区温度详情
 	ZoneTemp struct {
 		*Zone
-		Temperature
+		*Temperature
 	}
 
 	// ZonesTemp DTS所有防区温度
@@ -178,9 +194,9 @@ type (
 	// ZoneAlarm 报警防区信息
 	ZoneAlarm struct {
 		*Zone
-		Temperature
+		*Temperature
 		Location  float32                `json:"location"`
-		AlarmAt   TimeLocal              `json:"alarm_at"`
+		AlarmAt   *TimeLocal             `json:"alarm_at"`
 		AlarmType model.DefenceAreaState `json:"alarm_type"`
 	}
 
@@ -189,17 +205,17 @@ type (
 		Zones     []ZoneAlarm `json:"zones"`
 		DeviceId  string      `json:"device_id"`
 		Host      string      `json:"host,omitempty"`
-		CreatedAt TimeLocal   `json:"created_at"`
+		CreatedAt *TimeLocal  `json:"created_at"`
 	}
 
 	// ChannelSignal DTS某一通道温度信号
 	ChannelSignal struct {
-		DeviceId   string    `json:"device_id"`
-		ChannelId  int32     `json:"channel_id"`
-		RealLength float32   `json:"real_length"`
-		Host       string    `json:"host,omitempty"`
-		Signal     []float32 `json:"signal"`
-		CreatedAt  TimeLocal `json:"created_at"`
+		DeviceId   string     `json:"device_id"`
+		ChannelId  int32      `json:"channel_id"`
+		RealLength float32    `json:"real_length"`
+		Host       string     `json:"host,omitempty"`
+		Signal     []float32  `json:"signal"`
+		CreatedAt  *TimeLocal `json:"created_at"`
 	}
 
 	// ChannelEvent  DTS某一通道事件
@@ -209,9 +225,52 @@ type (
 		DeviceId      string           `json:"device_id"`
 		EventType     model.FiberState `json:"event_type"`
 		ChannelLength float32          `json:"channel_length"`
-		CreatedAt     TimeLocal        `json:"created_at"`
+		CreatedAt     *TimeLocal       `json:"created_at"`
 	}
 )
+
+func (ms *multiSorter) Sort(zones SortZones) {
+	ms.zones = zones
+	sort.Sort(ms)
+}
+
+func OrderedBy(less ...lessFunc) *multiSorter {
+	return &multiSorter{
+		less: less,
+	}
+}
+
+func (ms *multiSorter) Len() int {
+	return len(ms.zones)
+}
+
+func (ms *multiSorter) Swap(i, j int) {
+	ms.zones[i], ms.zones[j] = ms.zones[j], ms.zones[i]
+}
+
+func (ms *multiSorter) Less(i, j int) bool {
+	p, q := &ms.zones[i], &ms.zones[j]
+	var k int
+	for k = 0; k < len(ms.less)-1; k++ {
+		less := ms.less[k]
+		switch {
+		case less(*p, *q):
+			return true
+		case less(*q, *p):
+			return false
+		}
+	}
+	return ms.less[k](*p, *q)
+}
+
+func (t *Temperature) JSON() string {
+	data, _ := json.Marshal(t)
+	return string(data)
+}
+
+func (t *Temperature) String() string {
+	return fmt.Sprintf("最大温度: %.3f ,最小温度: %.3f ,平均温度: %.3f", t.Max, t.Min, t.Avg)
+}
 
 func (z *Zone) JSON() string {
 	data, _ := json.Marshal(z)
@@ -230,11 +289,59 @@ func (z *Zone) String() (str string) {
 	for k, v := range z.Tag {
 		str += fmt.Sprintf("[ %s : %s ],", k, v)
 	}
-	str = "]"
+	str += "]"
 	return
+}
+
+func (z *ZoneAlarm) String() string {
+	str := z.Zone.String()
+	str += fmt.Sprintf("报警类型: %s", GetAlarmTypeString(z.AlarmType))
+	str += fmt.Sprintf("报警位置: %.3f", z.Location)
+	str += fmt.Sprintf("报警温度: %s", z.Temperature)
+	return str
 }
 
 func (t *ZonesTemp) JSON() string {
 	data, _ := json.Marshal(t)
 	return string(data)
+}
+
+// ChannelZones  防区以通道形式分组
+func (zones SortZones) ChannelZones() []SortZones {
+	var (
+		channel []SortZones
+		i, j    int
+	)
+	for {
+		if i >= len(zones) {
+			break
+		}
+		for j = i + 1; j < len(zones) && zones[i].ChannelId == zones[j].ChannelId; j++ {
+		}
+		channel = append(channel, zones[i:j])
+		i = j
+	}
+	return channel
+}
+
+// ZoneMapSign 防区与信号的映射
+func ZoneMapSign(sign []float32, start, end, scale float32) ([]float32, error) {
+	if start > end {
+		return nil, errors.New(fmt.Sprintf("开始位置 %.3f 大于终点位置 %.3f", start, end))
+	}
+	var s, e = 0, 0
+	if math.Mod(float64(start), float64(scale)) == 0 {
+		s = int(start / scale)
+	} else {
+		s = int(start/scale) + 1
+	}
+	if math.Mod(float64(end), float64(scale)) == 0 {
+		e = int(end/scale) + 2
+	} else {
+		e = int(end/scale) + 1
+	}
+	if len(sign) < s || len(sign) < e {
+		return nil, errors.New(fmt.Sprintf("开始位置 %.3f 索引 %d 或终点位置 %.3f 索引 %d 与温度信号长度 %d 映射失败", start, s, end, e, len(sign)))
+	}
+	return sign[s:e], nil
 }

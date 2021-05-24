@@ -21,8 +21,8 @@ type Config struct {
 }
 
 type App struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	Context context.Context
+	cancel  context.CancelFunc
 
 	Client *dtssdk.Client
 	config Config
@@ -39,7 +39,7 @@ type App struct {
 func New(ctx context.Context, config Config) *App {
 	ctx, cancel := context.WithCancel(ctx)
 	return &App{
-		ctx:               ctx,
+		Context:           ctx,
 		cancel:            cancel,
 		config:            config,
 		ChanZonesTemp:     make(chan ZonesTemp, 10),
@@ -61,18 +61,18 @@ func (a *App) Run() {
 			for i, zone := range notify.GetZones() {
 				zones[i] = ZoneTemp{
 					Zone: a.GetZone(uint(zone.ID)),
-					Temperature: Temperature{
-						Max: zone.MaxTemperature,
-						Avg: zone.AverageTemperature,
-						Min: zone.MinTemperature,
+					Temperature: &Temperature{
+						Max: zone.GetMaxTemperature(),
+						Avg: zone.GetAverageTemperature(),
+						Min: zone.GetMinTemperature(),
 					},
 				}
 			}
 			select {
 			case a.ChanZonesTemp <- ZonesTemp{
-				DeviceId:  notify.DeviceID,
+				DeviceId:  notify.GetDeviceID(),
 				Host:      s,
-				CreatedAt: TimeLocal{time.Unix(notify.Timestamp, 0)},
+				CreatedAt: TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 				Zones:     zones,
 			}:
 			default:
@@ -89,7 +89,7 @@ func (a *App) Run() {
 				RealLength: notify.GetRealLength(),
 				Host:       s,
 				Signal:     notify.GetSignal(),
-				CreatedAt:  TimeLocal{time.Unix(notify.GetTimestamp(), 0)},
+				CreatedAt:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 			}
 			select {
 			case a.ChanChannelSignal <- signal:
@@ -104,28 +104,28 @@ func (a *App) Run() {
 			log.L.Warn(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", s))
 			alarms := make([]ZoneAlarm, len(notify.GetZones()))
 			for k, v := range notify.GetZones() {
-				zone := a.GetZone(uint(v.ID))
+				zone := a.GetZone(uint(v.GetID()))
 				if zone == nil {
-					log.L.Error("no zone find ", v.ID)
+					log.L.Error("没有找防区: ", v.GetID())
 					continue
 				}
 				alarms[k] = ZoneAlarm{
 					Zone: zone,
-					Temperature: Temperature{
-						Max: v.MaxTemperature,
-						Avg: v.AverageTemperature,
-						Min: v.MinTemperature,
+					Temperature: &Temperature{
+						Max: v.GetMaxTemperature(),
+						Avg: v.GetAverageTemperature(),
+						Min: v.GetMinTemperature(),
 					},
-					Location:  v.AlarmLoc,
-					AlarmType: v.AlarmType,
+					Location:  v.GetAlarmLoc(),
+					AlarmType: v.GetAlarmType(),
 				}
 			}
 			select {
 			case a.ChanZonesAlarm <- ZonesAlarm{
 				Zones:     alarms,
-				DeviceId:  "",
+				DeviceId:  notify.GetDeviceID(),
 				Host:      s,
-				CreatedAt: TimeLocal{time.Unix(notify.Timestamp, 0)},
+				CreatedAt: &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 			}:
 			default:
 			}
@@ -141,7 +141,7 @@ func (a *App) Run() {
 				Host:          s,
 				EventType:     notify.GetEventType(),
 				ChannelLength: notify.GetChannelLength(),
-				CreatedAt:     TimeLocal{time.Unix(notify.GetTimestamp(), 0)},
+				CreatedAt:     &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 			}
 			select {
 			case a.ChanChannelEvent <- event:
@@ -164,6 +164,7 @@ func (a *App) GetZones() map[uint]*Zone {
 	return a.Zones
 }
 
+// GetSyncChannelZones 同步获取通道防区
 func (a *App) GetSyncChannelZones(channelId byte) error {
 	response, err := a.Client.GetDefenceZone(int(channelId), "")
 	if err != nil {
@@ -231,6 +232,7 @@ func (a *App) GetSyncChannelZones(channelId byte) error {
 	return nil
 }
 
+// GetSyncZones 同步获取所有防区
 func (a *App) GetSyncZones() {
 	for i := byte(1); i <= a.config.ChannelNum; i++ {
 		err := a.GetSyncChannelZones(i)

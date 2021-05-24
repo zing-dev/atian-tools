@@ -8,7 +8,8 @@ import (
 )
 
 func main() {
-	app := dts.New(context.Background(), dts.Config{
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	app := dts.New(ctx, dts.Config{
 		EnableWarehouse: false,
 		EnableRelay:     false,
 		ChannelNum:      4,
@@ -18,13 +19,20 @@ func main() {
 	for {
 		select {
 		case temp := <-app.ChanZonesTemp:
-			fmt.Println(temp.JSON())
+			fmt.Println(temp.Zones[0])
 		case sign := <-app.ChanChannelSignal:
-			fmt.Println(sign)
+			fmt.Println("sign", sign.RealLength)
 		case event := <-app.ChanChannelEvent:
 			fmt.Println(event)
 		case alarm := <-app.ChanZonesAlarm:
 			fmt.Println(alarm)
+		case <-app.Context.Done():
+			app.Client.Close()
+			fmt.Println("out")
+			return
+		case <-time.After(time.Second * 5):
+			fmt.Println("will out")
+			cancel()
 		default:
 			time.Sleep(time.Second)
 		}
