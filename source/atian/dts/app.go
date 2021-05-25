@@ -20,6 +20,11 @@ type Config struct {
 	EnableRelay     bool
 	ChannelNum      byte
 	Host            string
+
+	//ZonesAlarmInterval 防区温度间隔秒
+	ZonesAlarmInterval byte
+	//ZonesTempInterval 报警温度间隔秒
+	ZonesTempInterval byte
 }
 
 type App struct {
@@ -38,20 +43,30 @@ type App struct {
 	ChanZonesAlarm    chan ZonesAlarm
 	Zones             map[uint]*Zone
 
-	locker sync.Mutex
+	ZonesTemp  sync.Map
+	ZonesAlarm sync.Map
+	locker     sync.Mutex
 }
 
 func New(ctx context.Context, config Config) *App {
+	if config.ZonesAlarmInterval <= 0 {
+		config.ZonesAlarmInterval = 10
+	}
+
+	if config.ZonesTempInterval <= 0 {
+		config.ZonesTempInterval = 30
+	}
+
 	ctx, cancel := context.WithCancel(ctx)
 	return &App{
 		Context:           ctx,
 		Cancel:            cancel,
 		Config:            config,
 		ChanStatus:        make(chan Status, 0),
-		ChanZonesTemp:     make(chan ZonesTemp, 10),
+		ChanZonesTemp:     make(chan ZonesTemp, 30),
 		ChanChannelSignal: make(chan ChannelSignal, 10),
 		ChanChannelEvent:  make(chan ChannelEvent, 10),
-		ChanZonesAlarm:    make(chan ZonesAlarm, 10),
+		ChanZonesAlarm:    make(chan ZonesAlarm, 30),
 		Zones:             map[uint]*Zone{},
 		locker:            sync.Mutex{},
 	}
@@ -69,9 +84,7 @@ func (a *App) GetStatus() device.StatusType {
 	return device.StatusType(a.Status())
 }
 
-func (a *App) Cron(cron *cron.Cron) {
-
-}
+func (a *App) Cron(*cron.Cron) {}
 
 func (a *App) Run() {
 	a.Client = dtssdk.NewDTSClient(a.Config.Host)
@@ -97,6 +110,11 @@ func (a *App) call() {
 	var err = errors.New("")
 	for err != nil {
 		err = a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
+			value, ok := a.ZonesTemp.LoadOrStore(notify.GetDeviceID(), notify)
+			if ok && time.Now().Sub(time.Unix(value.(*model.ZoneTempNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ZonesTempInterval) {
+				return
+			}
+			a.ZonesTemp.Store(notify.GetDeviceID(), notify)
 			zones := make([]ZoneTemp, len(notify.GetZones()))
 			for i, zone := range notify.GetZones() {
 				zones[i] = ZoneTemp{
@@ -146,8 +164,20 @@ func (a *App) call() {
 
 		err = a.Client.CallZoneAlarmNotify(func(notify *model.ZoneAlarmNotify, err error) {
 			log.L.Warn(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", a.Config.Host))
-			alarms := make([]ZoneAlarm, len(notify.GetZones()))
-			for k, v := range notify.GetZones() {
+			zones := make([]*model.DefenceZone, 0)
+			for _, zone := range notify.GetZones() {
+				value, ok := a.ZonesTemp.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), zone.ID), notify.GetTimestamp())
+				if ok && time.Now().Sub(time.Unix(value.(int64)/1000, 0)) < time.Second*time.Duration(a.Config.ZonesAlarmInterval) {
+					return
+				}
+				a.ZonesTemp.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), zone.ID), notify.GetTimestamp())
+				zones = append(zones, zone)
+			}
+			if len(zones) == 0 {
+				return
+			}
+			alarms := make([]ZoneAlarm, len(zones))
+			for k, v := range zones {
 				zone := a.GetZone(uint(v.GetID()))
 				if zone == nil {
 					log.L.Error("没有找防区: ", v.GetID())

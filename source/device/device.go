@@ -11,7 +11,9 @@ const (
 	_ Type = iota
 	TypeDTS
 	TypeRelay
+)
 
+const (
 	_ EventType = iota
 	EventError
 	EventAdd
@@ -19,7 +21,8 @@ const (
 	EventUpdate
 	EventClose
 	EventDelete
-
+)
+const (
 	_ StatusType = iota
 	Connecting
 	Connected

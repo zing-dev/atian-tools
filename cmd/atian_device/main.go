@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/robfig/cron/v3"
+	socket "github.com/zing-dev/atian-tools/protocol/websocket"
 	"github.com/zing-dev/atian-tools/source/device"
 	"log"
 	"net/http"
@@ -68,7 +69,7 @@ func main() {
 	w := gin.Default()
 	connections := make([]*websocket.Conn, 0)
 	w.GET("/", func(c *gin.Context) {
-		manger.WriteToWebsocket(connections...)
+		socket.WriteToWebsocket("", "", connections...)
 	})
 	w.GET("/api", func(c *gin.Context) {
 		upgrader := websocket.Upgrader{
