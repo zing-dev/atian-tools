@@ -2,8 +2,8 @@ package device
 
 import (
 	"context"
+	"fmt"
 	"github.com/robfig/cron/v3"
-	"golang.org/x/tools/go/ssa/interp/testdata/src/fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -18,12 +18,12 @@ const (
 )
 
 type Relay struct {
-	id     string
 	ctx    context.Context
 	cancel context.CancelFunc
 
 	ResetTime string
 	Client    http.Client
+	Tag       string
 	Url       string
 	Cron      *cron.Cron
 	CronId    cron.EntryID
@@ -32,7 +32,7 @@ type Relay struct {
 }
 
 func (r *Relay) GetId() string {
-	return fmt.Sprintf("relay-%s", r.Url)
+	return fmt.Sprintf("relay-%s", r.Tag)
 }
 
 func (r *Relay) GetType() Type {

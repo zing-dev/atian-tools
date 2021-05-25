@@ -2,7 +2,6 @@ package device
 
 import (
 	"context"
-	"github.com/gorilla/websocket"
 	"github.com/robfig/cron/v3"
 	"log"
 	"sync"
@@ -126,17 +125,6 @@ func (m *Manger) Delete(device Device) {
 		Device:    device,
 		EventType: EventDelete,
 	})
-}
-
-func (m *Manger) WriteToWebsocket(connections ...*websocket.Conn) {
-	status := m.GetStatus()
-	for _, conn := range connections {
-		err := conn.WriteJSON(status)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-	}
 }
 
 func (m *Manger) GetDevice(id string) Device {

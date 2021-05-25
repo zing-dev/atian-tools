@@ -2,13 +2,10 @@ package dts
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
-	"github.com/gorilla/websocket"
-	"github.com/kataras/neffos"
 	"github.com/robfig/cron/v3"
 	"github.com/zing-dev/atian-tools/log"
 	"github.com/zing-dev/atian-tools/source/device"
@@ -17,12 +14,6 @@ import (
 	"sync"
 	"time"
 )
-
-type WebSocketResponse struct {
-	Success bool        `json:"success"`
-	Type    string      `json:"type"`
-	Data    interface{} `json:"data"`
-}
 
 type Config struct {
 	EnableWarehouse bool
@@ -169,6 +160,7 @@ func (a *App) call() {
 						Avg: v.GetAverageTemperature(),
 						Min: v.GetMinTemperature(),
 					},
+					AlarmAt:   &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 					Location:  v.GetAlarmLoc(),
 					AlarmType: v.GetAlarmType(),
 				}
@@ -206,38 +198,6 @@ func (a *App) call() {
 		if err != nil {
 			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err))
 			time.Sleep(time.Second / 10)
-			continue
-		}
-	}
-}
-
-func (a *App) WriteToWebsockets(t string, data interface{}, server *neffos.Server) {
-	body, err := json.Marshal(WebSocketResponse{
-		Success: true,
-		Type:    t,
-		Data:    data,
-	})
-	if err != nil {
-		log.L.Error()
-		return
-	}
-	for _, conn := range server.GetConnections() {
-		ok := conn.Write(neffos.Message{
-			Body:     body,
-			IsNative: true,
-		})
-		if !ok {
-			log.L.Error("write not ok")
-			continue
-		}
-	}
-}
-
-func (a *App) WriteToWebsocket(data interface{}, connections ...*websocket.Conn) {
-	for _, conn := range connections {
-		err := conn.WriteJSON(data)
-		if err != nil {
-			log.L.Error(err)
 			continue
 		}
 	}
