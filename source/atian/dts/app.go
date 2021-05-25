@@ -91,7 +91,7 @@ func (a *App) Run() {
 	a.Client.CallConnected(func(s string) {
 		log.L.Info(fmt.Sprintf("主机为 %s 的dts连接成功", s))
 		a.setStatus(StatusOnline)
-		go a.GetSyncZones()
+		go a.SyncZones()
 		a.call()
 	})
 
@@ -263,20 +263,19 @@ func (a *App) GetZones() map[uint]*Zone {
 	return a.Zones
 }
 
-// GetSyncChannelZones 同步获取通道防区
-func (a *App) GetSyncChannelZones(channelId byte) error {
+func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 	response, err := a.Client.GetDefenceZone(int(channelId), "")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !response.Success {
-		return errors.New(response.ErrMsg)
+		return nil, errors.New(response.ErrMsg)
 	}
-	a.locker.Lock()
+	zones := make(Zones, len(response.Rows))
 	for k := range response.Rows {
 		v := response.Rows[k]
 		id := uint(v.ID)
-		a.Zones[id] = &Zone{
+		zones[k] = &Zone{
 			Id:        id,
 			Name:      v.ZoneName,
 			ChannelId: byte(v.ChannelID),
@@ -285,11 +284,10 @@ func (a *App) GetSyncChannelZones(channelId byte) error {
 			Host:      a.Config.Host,
 		}
 		if v.Tag != "" {
-			a.Zones[id].Tag = DecodeTags(v.Tag)
+			zones[k].Tag = DecodeTags(v.Tag)
 		}
 		if a.Config.EnableRelay {
-			//relay:A1,2,3,4,5
-			r, ok := a.Zones[id].Tag[TagRelay]
+			r, ok := zones[k].Tag[TagRelay]
 			if !ok {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签不存在", a.Config.Host, channelId, v.ZoneName))
 			} else if len(r) < 2 {
@@ -297,7 +295,7 @@ func (a *App) GetSyncChannelZones(channelId byte) error {
 			} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签模式不匹配: %s, 必须如A1,2,3,4", a.Config.Host, channelId, v.ZoneName, err))
 			} else {
-				a.Zones[id].Relay = Relay{r[0]: r[1:]}
+				zones[k].Relay = Relay{r[0]: r[1:]}
 			}
 		}
 		if a.Config.EnableWarehouse {
@@ -320,24 +318,37 @@ func (a *App) GetSyncChannelZones(channelId byte) error {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
 			}
-			a.Zones[id].ZoneExtend = ZoneExtend{
-				Warehouse: a.Zones[id].Tag[TagWarehouse],
-				Group:     a.Zones[id].Tag[TagGroup],
+			zones[k].ZoneExtend = ZoneExtend{
+				Warehouse: zones[k].Tag[TagWarehouse],
+				Group:     zones[k].Tag[TagGroup],
 				Row:       row,
 				Column:    column,
 				Layer:     layer,
 			}
 		}
 	}
+	return zones, nil
+}
+
+// SyncChannelZones 同步获取通道防区
+func (a *App) SyncChannelZones(channelId byte) error {
+	zones, err := a.GetSyncChannelZones(channelId)
+	if err != nil {
+		return err
+	}
+	a.locker.Lock()
+	for _, zone := range zones {
+		a.Zones[zone.Id] = zone
+	}
 	a.locker.Unlock()
 	log.L.Info(fmt.Sprintf("获取主机 %s 通道 %d 防区", a.Config.Host, channelId))
 	return nil
 }
 
-// GetSyncZones 同步获取所有防区
-func (a *App) GetSyncZones() {
+// SyncZones 同步获取所有防区
+func (a *App) SyncZones() {
 	for i := byte(1); i <= a.Config.ChannelNum; i++ {
-		err := a.GetSyncChannelZones(i)
+		err := a.SyncChannelZones(i)
 		if err != nil {
 			log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区失败: %s", a.Config.Host, i, err))
 		}

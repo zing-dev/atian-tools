@@ -17,8 +17,29 @@ var (
 	server *neffos.Server
 )
 
-func Register(s *neffos.Server)  {
+func Register(s *neffos.Server) {
 	server = s
+}
+
+func Send(body []byte, server *neffos.Server) {
+	for _, conn := range server.GetConnections() {
+		ok := conn.Write(neffos.Message{
+			Body:     body,
+			IsNative: true,
+		})
+		if !ok {
+			continue
+		}
+	}
+}
+
+func Write(data interface{}, server *neffos.Server) {
+	body, err := json.Marshal(data)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	Send(body, server)
 }
 
 func WriteToWebsockets(t string, data interface{}) {
@@ -34,16 +55,7 @@ func WriteToWebsockets(t string, data interface{}) {
 		log.Println(err)
 		return
 	}
-	for _, conn := range server.GetConnections() {
-		ok := conn.Write(neffos.Message{
-			Body:     body,
-			IsNative: true,
-		})
-		if !ok {
-			log.Println(err)
-			continue
-		}
-	}
+	Send(body, server)
 }
 
 func WriteToWebsocket(t string, data interface{}, connections ...*websocket.Conn) {
