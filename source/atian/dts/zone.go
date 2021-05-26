@@ -160,8 +160,14 @@ type (
 		At  *TimeLocal `json:"at,omitempty"`
 	}
 
-	// Zone 防区信息
-	Zone struct {
+	// Alarm 报警防区信息
+	Alarm struct {
+		Location  float32                `json:"location"`
+		AlarmAt   *TimeLocal             `json:"alarm_at"`
+		AlarmType model.DefenceAreaState `json:"alarm_type"`
+	}
+
+	BaseZone struct {
 		Id        uint    `json:"id,omitempty"`
 		Name      string  `json:"name,omitempty"`
 		ChannelId byte    `json:"channel_id,omitempty"`
@@ -170,7 +176,14 @@ type (
 		Finish    float32 `json:"finish,omitempty"`
 		Tag       Tag     `json:"tag,omitempty"`
 		Relay     Relay   `json:"relays,omitempty"`
-		ZoneExtend
+	}
+
+	// Zone 防区信息
+	Zone struct {
+		BaseZone
+		*ZoneExtend
+		*Temperature //防区温度详情
+		*Alarm       //报警防区信息
 	}
 
 	// ZoneExtend 防区扩展信息
@@ -203,35 +216,20 @@ type (
 		Zones     Zones
 	}
 
-	// ZoneTemp 防区温度详情
-	ZoneTemp struct {
-		*Zone
-		*Temperature
-	}
-
 	// ZonesTemp DTS所有防区温度
 	ZonesTemp struct {
-		DeviceId  string     `json:"device_id"`
-		Host      string     `json:"host,omitempty"`
-		CreatedAt TimeLocal  `json:"created_at"`
-		Zones     []ZoneTemp `json:"zones"`
-	}
-
-	// ZoneAlarm 报警防区信息
-	ZoneAlarm struct {
-		*Zone
-		*Temperature
-		Location  float32                `json:"location"`
-		AlarmAt   *TimeLocal             `json:"alarm_at"`
-		AlarmType model.DefenceAreaState `json:"alarm_type"`
+		DeviceId  string    `json:"device_id"`
+		Host      string    `json:"host,omitempty"`
+		CreatedAt TimeLocal `json:"created_at"`
+		Zones     Zones     `json:"zones"`
 	}
 
 	// ZonesAlarm 报警防区信息集合
 	ZonesAlarm struct {
-		Zones     []ZoneAlarm `json:"zones"`
-		DeviceId  string      `json:"device_id"`
-		Host      string      `json:"host,omitempty"`
-		CreatedAt *TimeLocal  `json:"created_at"`
+		Zones     Zones      `json:"zones"`
+		DeviceId  string     `json:"device_id"`
+		Host      string     `json:"host,omitempty"`
+		CreatedAt *TimeLocal `json:"created_at"`
 	}
 
 	// ChannelSignal DTS某一通道温度信号
@@ -317,14 +315,6 @@ func (z *Zone) String() (str string) {
 	}
 	str += "]"
 	return
-}
-
-func (z *ZoneAlarm) String() string {
-	str := z.Zone.String()
-	str += fmt.Sprintf("报警类型: %s", GetAlarmTypeString(z.AlarmType))
-	str += fmt.Sprintf("报警位置: %.3f", z.Location)
-	str += fmt.Sprintf("报警温度: %s", z.Temperature)
-	return str
 }
 
 func (t *ZonesTemp) JSON() string {

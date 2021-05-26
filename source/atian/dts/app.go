@@ -115,15 +115,13 @@ func (a *App) call() {
 				return
 			}
 			a.ZonesTemp.Store(notify.GetDeviceID(), notify)
-			zones := make([]ZoneTemp, len(notify.GetZones()))
+			zones := make(Zones, len(notify.GetZones()))
 			for i, zone := range notify.GetZones() {
-				zones[i] = ZoneTemp{
-					Zone: a.GetZone(uint(zone.ID)),
-					Temperature: &Temperature{
-						Max: zone.GetMaxTemperature(),
-						Avg: zone.GetAverageTemperature(),
-						Min: zone.GetMinTemperature(),
-					},
+				zones[i] = a.GetZone(uint(zone.ID))
+				zones[i].Temperature = &Temperature{
+					Max: zone.GetMaxTemperature(),
+					Avg: zone.GetAverageTemperature(),
+					Min: zone.GetMinTemperature(),
 				}
 			}
 			select {
@@ -176,20 +174,20 @@ func (a *App) call() {
 			if len(zones) == 0 {
 				return
 			}
-			alarms := make([]ZoneAlarm, len(zones))
+			alarms := make(Zones, len(zones))
 			for k, v := range zones {
 				zone := a.GetZone(uint(v.GetID()))
 				if zone == nil {
 					log.L.Error("没有找防区: ", v.GetID())
 					continue
 				}
-				alarms[k] = ZoneAlarm{
-					Zone: zone,
-					Temperature: &Temperature{
-						Max: v.GetMaxTemperature(),
-						Avg: v.GetAverageTemperature(),
-						Min: v.GetMinTemperature(),
-					},
+				alarms[k] = zone
+				alarms[k].Temperature = &Temperature{
+					Max: v.GetMaxTemperature(),
+					Avg: v.GetAverageTemperature(),
+					Min: v.GetMinTemperature(),
+				}
+				alarms[k].Alarm = &Alarm{
 					AlarmAt:   &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 					Location:  v.GetAlarmLoc(),
 					AlarmType: v.GetAlarmType(),
@@ -275,7 +273,8 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 	for k := range response.Rows {
 		v := response.Rows[k]
 		id := uint(v.ID)
-		zones[k] = &Zone{
+		zones[k] = new(Zone)
+		zones[k].BaseZone = BaseZone{
 			Id:        id,
 			Name:      v.ZoneName,
 			ChannelId: byte(v.ChannelID),
@@ -318,7 +317,7 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
 			}
-			zones[k].ZoneExtend = ZoneExtend{
+			zones[k].ZoneExtend = &ZoneExtend{
 				Warehouse: zones[k].Tag[TagWarehouse],
 				Group:     zones[k].Tag[TagGroup],
 				Row:       row,
