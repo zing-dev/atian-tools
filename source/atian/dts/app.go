@@ -171,14 +171,25 @@ func (a *App) call() {
 				a.ZonesTemp.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), zone.ID), notify.GetTimestamp())
 				zones = append(zones, zone)
 			}
-			if len(zones) == 0 {
+			length := len(zones)
+			if length == 0 {
+				log.L.Error(fmt.Sprintf("主机为 %s 的dts更新防区温度数量为空!", a.Config.Host))
 				return
+			}
+			if length > 10 {
+				divide := length / 5
+				if zones[0].AverageTemperature == 0 && zones[divide*1].AverageTemperature == 0 &&
+					zones[divide*2].AverageTemperature == 0 && zones[divide*3].AverageTemperature == 0 &&
+					zones[divide*4].AverageTemperature == 0 && zones[divide*5-1].AverageTemperature == 0 {
+					log.L.Error(fmt.Sprintf("主机为 %s 的dts更新防区温度异常!", a.Config.Host))
+					return
+				}
 			}
 			alarms := make(Zones, len(zones))
 			for k, v := range zones {
 				zone := a.GetZone(uint(v.GetID()))
 				if zone == nil {
-					log.L.Error("没有找防区: ", v.GetID())
+					log.L.Error("没有找到该防区: ", v.GetID())
 					continue
 				}
 				alarms[k] = zone
