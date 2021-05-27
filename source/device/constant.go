@@ -1,5 +1,12 @@
 package device
 
+import (
+	"database/sql/driver"
+	"fmt"
+	"github.com/sirupsen/logrus"
+	"time"
+)
+
 const (
 	ColorDefault = "default"
 	ColorPrimary = "primary"
@@ -76,10 +83,50 @@ func GetDeviceMap() []Constant {
 	}
 }
 
+func (t TimeLocal) MarshalJSON() ([]byte, error) {
+	return []byte(t.Format(`"2006-01-02 15:04:05"`)), nil
+}
+
+func (t *TimeLocal) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+	var err error
+	t.Time, err = time.Parse(`"`+"2006-01-02 15:04:05"+`"`, string(data))
+	return err
+}
+
+func (t TimeLocal) Value() (driver.Value, error) {
+	var zeroTime time.Time
+	if t.Time.UnixNano() == zeroTime.UnixNano() {
+		return nil, nil
+	}
+	return t.Time, nil
+}
+
+func (t *TimeLocal) Scan(v interface{}) error {
+	value, ok := v.(time.Time)
+	if ok {
+		*t = TimeLocal{Time: value}
+		return nil
+	}
+	return fmt.Errorf("can not convert %v to timestamp", v)
+}
+
 type (
 	Type       byte
 	EventType  byte
 	StatusType byte
+
+	Message struct {
+		Msg   string       `json:"msg"`
+		Level logrus.Level `json:"level"`
+		At    TimeLocal    `json:"at"`
+	}
+
+	TimeLocal struct {
+		time.Time
+	}
 
 	Constant struct {
 		Name  string `json:"name"`

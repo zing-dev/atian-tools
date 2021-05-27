@@ -7,6 +7,7 @@ import (
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
 	"github.com/robfig/cron/v3"
+	"github.com/sirupsen/logrus"
 	"github.com/zing-dev/atian-tools/log"
 	"github.com/zing-dev/atian-tools/source/device"
 	"sync"
@@ -39,6 +40,7 @@ type App struct {
 	status     device.StatusType
 	ChanStatus chan device.StatusType
 
+	ChanMessage       chan device.Message
 	ChanZonesTemp     chan ZonesTemp
 	ChanChannelSignal chan ChannelSignal
 	ChanChannelEvent  chan ChannelEvent
@@ -68,6 +70,7 @@ func New(ctx context.Context, config Config) *App {
 		Context:           ctx,
 		cancel:            cancel,
 		Config:            config,
+		ChanMessage:       make(chan device.Message, 0),
 		ChanStatus:        make(chan device.StatusType, 0),
 		ChanZonesTemp:     make(chan ZonesTemp, 30),
 		ChanChannelSignal: make(chan ChannelSignal, 10),
@@ -95,19 +98,19 @@ func (a *App) Run() {
 	a.Client = dtssdk.NewDTSClient(a.Config.Host)
 	a.setStatus(device.Disconnect)
 	a.Client.CallConnected(func(s string) {
-		log.L.Info(fmt.Sprintf("主机为 %s 的dts连接成功", s))
 		a.SyncZones()
 		a.setStatus(device.Connected)
+		a.setMessage(fmt.Sprintf("主机为 %s 的dts连接成功", s), logrus.InfoLevel)
 		a.call()
 	})
 
 	a.Client.OnTimeout(func(s string) {
-		log.L.Warn(fmt.Sprintf("主机为 %s 的dts连接超时", s))
+		a.setMessage(fmt.Sprintf("主机为 %s 的dts连接超时", s), logrus.WarnLevel)
 		a.setStatus(device.Connecting)
 	})
 
 	a.Client.CallDisconnected(func(s string) {
-		log.L.Warn(fmt.Sprintf("主机为 %s 的dts断开连接", s))
+		a.setMessage(fmt.Sprintf("主机为 %s 的dts断开连接", s), logrus.WarnLevel)
 		a.setStatus(device.Disconnect)
 	})
 }
@@ -126,13 +129,14 @@ func (a *App) call() {
 				id := Id(a.Config.DeviceId, uint(zone.GetID()))
 				zones[i] = a.GetZone(id)
 				if zones[i] == nil {
-					log.L.Error(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id))
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id), logrus.ErrorLevel)
 					continue
 				}
 				zones[i].Temperature = &Temperature{
 					Max: zone.GetMaxTemperature(),
 					Avg: zone.GetAverageTemperature(),
 					Min: zone.GetMinTemperature(),
+					At:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 				}
 			}
 			select {
@@ -146,8 +150,8 @@ func (a *App) call() {
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受温度回调失败: %s", a.Config.Host, err))
-			time.Sleep(time.Second / 10)
+			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受温度回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
+			time.Sleep(time.Second * 3)
 			continue
 		}
 
@@ -158,7 +162,7 @@ func (a *App) call() {
 			}
 			length := len(notify.GetSignal())
 			if length == 0 {
-				log.L.Error(fmt.Sprintf("主机为 %s 通道 %d 的dts信号数据为空!", a.Config.Host, notify.GetChannelID()))
+				a.setMessage(fmt.Sprintf("主机为 %s 通道 %d 的dts信号数据为空!", a.Config.Host, notify.GetChannelID()), logrus.ErrorLevel)
 				return
 			}
 			if length > 10 {
@@ -166,7 +170,7 @@ func (a *App) call() {
 				divide := length / 5
 				if signal[0] == 0 && signal[divide*1] == 0 && signal[divide*2] == 0 && signal[divide*3] == 0 &&
 					signal[divide*4] == 0 && signal[divide*5-1] == 0 {
-					log.L.Error(fmt.Sprintf("主机为 %s 通道 %d 的dts信号异常!", a.Config.Host, notify.GetChannelID()))
+					a.setMessage(fmt.Sprintf("主机为 %s 通道 %d 的dts信号异常!", a.Config.Host, notify.GetChannelID()), logrus.ErrorLevel)
 					return
 				}
 			}
@@ -186,13 +190,13 @@ func (a *App) call() {
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err))
-			time.Sleep(time.Second / 10)
+			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
+			time.Sleep(time.Second * 3)
 			continue
 		}
 
 		err = a.Client.CallZoneAlarmNotify(func(notify *model.ZoneAlarmNotify, err error) {
-			log.L.Warn(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", a.Config.Host))
+			a.setMessage(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", a.Config.Host), logrus.WarnLevel)
 			zones := make([]*model.DefenceZone, 0)
 			for _, zone := range notify.GetZones() {
 				value, ok := a.ZonesTemp.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), Id(a.Config.DeviceId, uint(zone.ID))), notify.GetTimestamp())
@@ -204,7 +208,7 @@ func (a *App) call() {
 			}
 			length := len(zones)
 			if length == 0 {
-				log.L.Error(fmt.Sprintf("主机为 %s 的dts更新防区温度数量为空!", a.Config.Host))
+				a.setMessage(fmt.Sprintf("主机为 %s 的dts更新防区温度数量为空!", a.Config.Host), logrus.ErrorLevel)
 				return
 			}
 			if length > 10 {
@@ -212,7 +216,7 @@ func (a *App) call() {
 				if zones[0].AverageTemperature == 0 && zones[divide*1].AverageTemperature == 0 &&
 					zones[divide*2].AverageTemperature == 0 && zones[divide*3].AverageTemperature == 0 &&
 					zones[divide*4].AverageTemperature == 0 && zones[divide*5-1].AverageTemperature == 0 {
-					log.L.Error(fmt.Sprintf("主机为 %s 的dts更新防区温度异常!", a.Config.Host))
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts更新防区温度异常!", a.Config.Host), logrus.ErrorLevel)
 					return
 				}
 			}
@@ -221,7 +225,7 @@ func (a *App) call() {
 				id := Id(a.Config.DeviceId, uint(v.GetID()))
 				zone := a.GetZone(id)
 				if zone == nil {
-					log.L.Error(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id))
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id), logrus.ErrorLevel)
 					continue
 				}
 				alarms[k] = zone
@@ -247,8 +251,8 @@ func (a *App) call() {
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受报警回调失败: %s", a.Config.Host, err))
-			time.Sleep(time.Second / 10)
+			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受报警回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
+			time.Sleep(time.Second * 3)
 			continue
 		}
 
@@ -267,7 +271,7 @@ func (a *App) call() {
 			}
 		})
 		if err != nil {
-			log.L.Error(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err))
+			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
 			time.Sleep(time.Second / 10)
 			continue
 		}
@@ -297,6 +301,18 @@ func (a *App) setStatus(s device.StatusType) {
 	a.locker.Unlock()
 	select {
 	case a.ChanStatus <- s:
+	default:
+	}
+}
+
+func (a *App) setMessage(msg string, level logrus.Level) {
+	log.L.Log(level, msg)
+	select {
+	case a.ChanMessage <- device.Message{
+		Msg:   msg,
+		Level: level,
+		At:    device.TimeLocal{Time: time.Now()},
+	}:
 	default:
 	}
 }
@@ -376,7 +392,7 @@ func (a *App) SyncZones() {
 	for i := byte(1); i <= a.Config.ChannelNum; i++ {
 		err := a.SyncChannelZones(i)
 		if err != nil {
-			log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区失败: %s", a.Config.Host, i, err))
+			a.setMessage(fmt.Sprintf("获取主机 %s 通道 %d 防区失败: %s", a.Config.Host, i, err), logrus.ErrorLevel)
 		}
 	}
 }
