@@ -7,47 +7,7 @@ import (
 	"sync"
 )
 
-const (
-	_ Type = iota
-	TypeDTS
-	TypeRelay
-	TypeApi
-)
-
-const (
-	_ EventType = iota
-	EventError
-	EventAdd
-	EventRun
-	EventUpdate
-	EventClose
-	EventDelete
-)
-const (
-	_ StatusType = iota
-	Connecting
-	Connected
-	Disconnect
-)
-
-func (s *StatusType) String() string {
-	switch *s {
-	case Connecting:
-		return "连接中"
-	case Connected:
-		return "已连接"
-	case Disconnect:
-		return "已断开"
-	default:
-		return "未知状态"
-	}
-}
-
 type (
-	Type       byte
-	EventType  byte
-	StatusType byte
-
 	Status struct {
 		Id     string     `json:"id"`
 		Type   Type       `json:"type"`

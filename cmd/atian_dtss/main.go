@@ -66,16 +66,16 @@ func main() {
 						log.Println("开始配置新能源防区结构层级...")
 						core.locker.Lock()
 						for _, zone := range app.Zones {
-							if zone.Warehouse == "" || zone.Group == "" {
+							if zone.Coordinate.Warehouse == "" || zone.Coordinate.Group == "" {
 								continue
 							}
-							if len(core.WarehouseZones[zone.Warehouse]) == 0 {
-								core.WarehouseZones[zone.Warehouse] = map[string]dts.Zones{}
+							if len(core.WarehouseZones[zone.Coordinate.Warehouse]) == 0 {
+								core.WarehouseZones[zone.Coordinate.Warehouse] = map[string]dts.Zones{}
 							}
-							if len(core.WarehouseZones[zone.Warehouse][zone.Group]) == 0 {
-								core.WarehouseZones[zone.Warehouse][zone.Group] = dts.Zones{}
+							if len(core.WarehouseZones[zone.Coordinate.Warehouse][zone.Coordinate.Group]) == 0 {
+								core.WarehouseZones[zone.Coordinate.Warehouse][zone.Coordinate.Group] = dts.Zones{}
 							}
-							core.WarehouseZones[zone.Warehouse][zone.Group] = append(core.WarehouseZones[zone.Warehouse][zone.Group], zone)
+							core.WarehouseZones[zone.Coordinate.Warehouse][zone.Coordinate.Group] = append(core.WarehouseZones[zone.Coordinate.Warehouse][zone.Coordinate.Group], zone)
 						}
 						core.locker.Unlock()
 						log.Println("配置新能源防区结构层级结束...")
@@ -87,9 +87,9 @@ func main() {
 				case event := <-app.ChanChannelEvent:
 					log.Println("event", event.Host)
 				case alarm := <-app.ChanZonesAlarm:
-					log.Println("alarm start", alarm.Host, dts.GetAlarmTypeString(alarm.Zones[0].AlarmType))
+					log.Println("alarm start", alarm.Host, dts.GetAlarmTypeString(alarm.Zones[0].Alarm.State))
 					time.Sleep(time.Second)
-					log.Println("alarm over", alarm.Host, dts.GetAlarmTypeString(alarm.Zones[0].AlarmType))
+					log.Println("alarm over", alarm.Host, dts.GetAlarmTypeString(alarm.Zones[0].Alarm.State))
 				}
 			}
 		}(config)

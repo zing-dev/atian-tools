@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
 	"github.com/zing-dev/atian-tools/log"
+	"github.com/zing-dev/atian-tools/source/device"
 	"math"
 	"regexp"
 	"sort"
@@ -62,6 +63,32 @@ func DecodeTags(tag string) (res map[string]string) {
 	return
 }
 
+func GetAlarmTypeMap() (m []device.Constant) {
+	for _, state := range []model.DefenceAreaState{
+		model.DefenceAreaState_Normal,
+		model.DefenceAreaState_WarnDiffer,
+		model.DefenceAreaState_WarnUp,
+		model.DefenceAreaState_WarnTemp,
+		model.DefenceAreaState_AlarmDiffer,
+		model.DefenceAreaState_AlarmUp,
+		model.DefenceAreaState_AlarmTemp,
+		model.DefenceAreaState_WarnLowTemp,
+		model.DefenceAreaState_AlarmLowTemp,
+	} {
+		constant := device.Constant{Name: GetAlarmTypeString(state), Value: byte(state)}
+		switch state {
+		case model.DefenceAreaState_AlarmTemp:
+			constant.Color = device.ColorDanger
+		case model.DefenceAreaState_Normal:
+			constant.Color = device.ColorInfo
+		default:
+			constant.Color = device.ColorWarning
+		}
+		m = append(m, constant)
+	}
+	return
+}
+
 func GetAlarmTypeString(t model.DefenceAreaState) string {
 	switch t {
 	case model.DefenceAreaState_Normal:
@@ -85,6 +112,29 @@ func GetAlarmTypeString(t model.DefenceAreaState) string {
 	default:
 		return "非法的防区状态"
 	}
+}
+
+func GetEventTypeMap() (m []device.Constant) {
+	for _, state := range []model.FiberState{
+		model.FiberState_SSTATEISOK,
+		model.FiberState_SSTATUSUNFIN,
+		model.FiberState_SSTATUSFIN,
+		model.FiberState_SSTATUSBRK,
+		model.FiberState_SSTATUSTLO,
+		model.FiberState_SSTATUSLTM,
+	} {
+		constant := device.Constant{Name: GetEventTypeString(state), Value: byte(state)}
+		switch state {
+		case model.FiberState_SSTATEISOK:
+			constant.Color = device.ColorInfo
+		case model.FiberState_SSTATUSBRK:
+			constant.Color = device.ColorDanger
+		default:
+			constant.Color = device.ColorWarning
+		}
+		m = append(m, constant)
+	}
+	return
 }
 
 func GetEventTypeString(t model.FiberState) string {
@@ -424,21 +474,6 @@ func NewCoordinate(tag map[string]string) (*Coordinate, error) {
 			break
 		}
 	}
-	//row, err = strconv.Atoi(tag[TagRow])
-	//if err != nil {
-	//	//log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.Config.Host, channelId, v.ZoneName, err))
-	//	return nil
-	//}
-	//column, err = strconv.Atoi(tag[TagColumn])
-	//if err != nil {
-	//	//log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.Config.Host, channelId, v.ZoneName, err))
-	//	return nil
-	//}
-	//layer, err = strconv.Atoi(tag[TagLayer])
-	//if err != nil {
-	//	//log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.Config.Host, channelId, v.ZoneName, err))
-	//	return nil
-	//}
 	return &Coordinate{
 		Warehouse: w,
 		Group:     g,

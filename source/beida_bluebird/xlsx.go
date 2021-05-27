@@ -99,6 +99,9 @@ func (m Maps) Load(filename string) {
 				Part:       byte(part),
 				PartType:   byte(partType),
 			}
+			if _, ok := m[item.Key()]; ok {
+				log.L.Warn("重复的防区唯一Id: ", item)
+			}
 			m[item.Key()] = append(m[item.Key()], item)
 			if k == 0 || k == len(rows)/3 || k == len(rows)-2 {
 				show[k] = item
