@@ -6,6 +6,7 @@ import (
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/zing-dev/atian-tools/log"
 	"strconv"
+	"strings"
 )
 
 type Map struct {
@@ -69,19 +70,19 @@ func (m Maps) Load(filename string) {
 	for k, row := range rows[1:] {
 		if len(row) >= 5 {
 			controller := 1
-			controller, err = strconv.Atoi(row[2])
+			controller, err = strconv.Atoi(strings.TrimSpace(row[2]))
 			if err != nil {
-				log.L.Error(fmt.Sprintf("解析 %d 控制器号失败: %s", k+1, err))
+				log.L.Error(fmt.Sprintf("解析 %d 控制器号 %s 失败: %s", k+1, row[2], err))
 				continue
 			}
-			loop, err := strconv.Atoi(row[3])
+			loop, err := strconv.Atoi(strings.TrimSpace(row[3]))
 			if err != nil {
-				log.L.Error(fmt.Sprintf("解析 %d 回路号失败: %s", k+1, err))
+				log.L.Error(fmt.Sprintf("解析 %d 回路号 %s 失败: %s", k+1, row[3], err))
 				continue
 			}
-			part, err := strconv.Atoi(row[4])
+			part, err := strconv.Atoi(strings.TrimSpace(row[4]))
 			if err != nil {
-				log.L.Error(fmt.Sprintf("解析 %d 部位号失败: %s", k+1, err))
+				log.L.Error(fmt.Sprintf("解析 %d 部位号 %s 失败: %s", k+1, row[4], err))
 				continue
 			}
 			partType := int(PartTypeSmokeSensation)
