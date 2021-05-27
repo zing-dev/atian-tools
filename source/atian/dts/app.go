@@ -16,6 +16,7 @@ import (
 )
 
 type Config struct {
+	DeviceId        uint
 	EnableWarehouse bool
 	EnableRelay     bool
 	ChannelNum      byte
@@ -124,7 +125,7 @@ func (a *App) call() {
 			a.ZonesTemp.Store(notify.GetDeviceID(), notify)
 			zones := make(Zones, len(notify.GetZones()))
 			for i, zone := range notify.GetZones() {
-				zones[i] = a.GetZone(uint(zone.ID))
+				zones[i] = a.GetZone(Id(a.Config.DeviceId, uint(zone.ID)))
 				zones[i].Temperature = &Temperature{
 					Max: zone.GetMaxTemperature(),
 					Avg: zone.GetAverageTemperature(),
@@ -191,11 +192,11 @@ func (a *App) call() {
 			log.L.Warn(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", a.Config.Host))
 			zones := make([]*model.DefenceZone, 0)
 			for _, zone := range notify.GetZones() {
-				value, ok := a.ZonesTemp.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), zone.ID), notify.GetTimestamp())
+				value, ok := a.ZonesTemp.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), Id(a.Config.DeviceId, uint(zone.ID))), notify.GetTimestamp())
 				if ok && time.Now().Sub(time.Unix(value.(int64)/1000, 0)) < time.Second*time.Duration(a.Config.ZonesAlarmInterval) {
 					return
 				}
-				a.ZonesTemp.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), zone.ID), notify.GetTimestamp())
+				a.ZonesTemp.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), Id(a.Config.DeviceId, uint(zone.ID))), notify.GetTimestamp())
 				zones = append(zones, zone)
 			}
 			length := len(zones)
@@ -317,7 +318,7 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 	zones := make(Zones, len(response.Rows))
 	for k := range response.Rows {
 		v := response.Rows[k]
-		id := uint(v.ID)
+		id := Id(a.Config.DeviceId, uint(v.ID))
 		zones[k] = new(Zone)
 		zones[k].BaseZone = BaseZone{
 			Id:        id,

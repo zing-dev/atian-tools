@@ -361,3 +361,8 @@ func ZoneMapSign(sign []float32, start, end, scale float32) ([]float32, error) {
 	}
 	return sign[s:e], nil
 }
+
+// Id 设备Id和防区Id绑定
+func Id(deviceId, zoneId uint) uint {
+	return deviceId*1e6 + zoneId
+}
