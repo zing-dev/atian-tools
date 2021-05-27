@@ -9,8 +9,6 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/zing-dev/atian-tools/log"
 	"github.com/zing-dev/atian-tools/source/device"
-	"regexp"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -98,8 +96,8 @@ func (a *App) Run() {
 	a.setStatus(device.Disconnect)
 	a.Client.CallConnected(func(s string) {
 		log.L.Info(fmt.Sprintf("主机为 %s 的dts连接成功", s))
+		a.SyncZones()
 		a.setStatus(device.Connected)
-		go a.SyncZones()
 		a.call()
 	})
 
@@ -233,9 +231,9 @@ func (a *App) call() {
 					Min: v.GetMinTemperature(),
 				}
 				alarms[k].Alarm = &Alarm{
-					AlarmAt:   &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
-					Location:  v.GetAlarmLoc(),
-					AlarmType: v.GetAlarmType(),
+					At:       &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+					Location: v.GetAlarmLoc(),
+					State:    v.GetAlarmType(),
 				}
 			}
 			select {
@@ -334,50 +332,61 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 			Finish:    v.GetFinish(),
 			Host:      a.Config.Host,
 		}
-		if v.Tag != "" && (a.Config.EnableRelay || a.Config.EnableWarehouse) {
+		if v.Tag == "" && (a.Config.EnableRelay || a.Config.EnableWarehouse) {
 			log.L.Warn(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 标签为空", a.Config.Host, channelId, v.ZoneName))
 			continue
 		}
 		zones[k].Tag = DecodeTags(v.GetTag())
 		if a.Config.EnableRelay {
-			r, ok := zones[k].Tag[TagRelay]
-			if !ok {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签不存在", a.Config.Host, channelId, v.ZoneName))
-			} else if len(r) < 2 {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签字符值至少两位,例如A1", a.Config.Host, channelId, v.ZoneName))
-			} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签模式不匹配: %s, 必须如A1,2,3,4", a.Config.Host, channelId, v.ZoneName, err))
-			} else {
-				zones[k].Relay = Relay{r[0]: r[1:]}
+			//r, ok := zones[k].Tag[TagRelay]
+			//if !ok {
+			//	log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签不存在", a.Config.Host, channelId, v.ZoneName))
+			//} else if len(r) < 2 {
+			//	log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签字符值至少两位,例如A1", a.Config.Host, channelId, v.ZoneName))
+			//} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
+			//	log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 继电器标签模式不匹配: %s, 必须如A1,2,3,4", a.Config.Host, channelId, v.ZoneName, err))
+			//} else {
+			//	zones[k].Relay = Relay{r[0]: r[1:]}
+			//}
+			relay, err := NewRelay(zones[k].Tag)
+			if err != nil {
+				continue
 			}
+			zones[k].Relay = relay
 		}
 		if a.Config.EnableWarehouse {
-			var (
-				row, column, layer = 0, 0, 0
-				err                error
-			)
-			row, err = strconv.Atoi(zones[k].Tag[TagRow])
+			//var (
+			//	row, column, layer = 0, 0, 0
+			//	err                error
+			//)
+			//row, err = strconv.Atoi(zones[k].Tag[TagRow])
+			//if err != nil {
+			//	log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.Config.Host, channelId, v.ZoneName, err))
+			//	continue
+			//}
+			//column, err = strconv.Atoi(zones[k].Tag[TagColumn])
+			//if err != nil {
+			//	log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.Config.Host, channelId, v.ZoneName, err))
+			//	continue
+			//}
+			//layer, err = strconv.Atoi(zones[k].Tag[TagLayer])
+			//if err != nil {
+			//	log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.Config.Host, channelId, v.ZoneName, err))
+			//	continue
+			//}
+			//zones[k].Coordinate = &Coordinate{
+			//	Warehouse: zones[k].Tag[TagWarehouse],
+			//	Group:     zones[k].Tag[TagGroup],
+			//	Row:       row,
+			//	Column:    column,
+			//	Layer:     layer,
+			//}
+			coordinate, err := NewCoordinate(zones[k].Tag)
 			if err != nil {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.Config.Host, channelId, v.ZoneName, err))
+				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 坐标失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
 			}
-			column, err = strconv.Atoi(zones[k].Tag[TagColumn])
-			if err != nil {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.Config.Host, channelId, v.ZoneName, err))
-				continue
-			}
-			layer, err = strconv.Atoi(zones[k].Tag[TagLayer])
-			if err != nil {
-				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.Config.Host, channelId, v.ZoneName, err))
-				continue
-			}
-			zones[k].ZoneExtend = &ZoneExtend{
-				Warehouse: zones[k].Tag[TagWarehouse],
-				Group:     zones[k].Tag[TagGroup],
-				Row:       row,
-				Column:    column,
-				Layer:     layer,
-			}
+			zones[k].Coordinate = coordinate
 			log.L.Info(zones[k])
 		}
 	}

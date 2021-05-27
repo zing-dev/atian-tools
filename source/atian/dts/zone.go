@@ -8,7 +8,9 @@ import (
 	"github.com/Atian-OE/DTSSDK_Golang/dtssdk/model"
 	"github.com/zing-dev/atian-tools/log"
 	"math"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -126,17 +128,17 @@ const (
 	TagValueSeparator = "="
 
 	// TagWarehouse 仓库
-	TagWarehouse = "warehouse" //示例 warehouse:w01
+	TagWarehouse = "warehouse|库" //示例 warehouse:w01
 	// TagGroup 组
-	TagGroup = "group" //示例 group:g001
+	TagGroup = "group|组" //示例 group:g001
 	// TagRow 行
-	TagRow = "row" //示例 row:1
+	TagRow = "row|行" //示例 row:1
 	// TagColumn 列
-	TagColumn = "column" //示例 column:1
+	TagColumn = "column|列" //示例 column:1
 	// TagLayer 层
-	TagLayer = "layer" //示例 layer:1
+	TagLayer = "layer|层" //示例 layer:1
 
-	TagRelay = "relay" //示例 relay:A1,2,3,4
+	TagRelay = "relay|继电器" //示例 relay:A1,2,3,4
 )
 
 type (
@@ -162,9 +164,9 @@ type (
 
 	// Alarm 报警防区信息
 	Alarm struct {
-		Location  float32                `json:"location"`
-		AlarmAt   *TimeLocal             `json:"alarm_at"`
-		AlarmType model.DefenceAreaState `json:"alarm_type"`
+		Location float32                `json:"location"`
+		At       *TimeLocal             `json:"at"`
+		State    model.DefenceAreaState `json:"state"`
 	}
 
 	BaseZone struct {
@@ -181,18 +183,18 @@ type (
 	// Zone 防区信息
 	Zone struct {
 		BaseZone
-		*ZoneExtend
-		*Temperature //防区温度详情
-		*Alarm       //报警防区信息
+		Coordinate  *Coordinate  `json:"coordinate,omitempty"`
+		Temperature *Temperature `json:"temperature,omitempty"` //防区温度详情
+		Alarm       *Alarm       `json:"alarm,omitempty"`       //报警防区信息
 	}
 
-	// ZoneExtend 防区扩展信息
-	ZoneExtend struct {
+	// Coordinate 防区空间左边位置
+	Coordinate struct {
 		Warehouse string `json:"warehouse,omitempty"`
 		Group     string `json:"group,omitempty"`
-		Row       int    `json:"row,omitempty"`
-		Column    int    `json:"column,omitempty"`
-		Layer     int    `json:"layer,omitempty"`
+		Row       uint16 `json:"row,omitempty"`
+		Column    uint16 `json:"column,omitempty"`
+		Layer     uint16 `json:"layer,omitempty"`
 	}
 
 	// Zones 防区集合
@@ -365,4 +367,83 @@ func ZoneMapSign(sign []float32, start, end, scale float32) ([]float32, error) {
 // Id 设备Id和防区Id绑定
 func Id(deviceId, zoneId uint) uint {
 	return deviceId*1e6 + zoneId
+}
+
+type D3 struct {
+	name  string
+	tag   string
+	value uint16
+}
+
+func NewRelay(tag map[string]string) (Relay, error) {
+	for _, t := range strings.Split(TagRelay, "|") {
+		if r, ok := tag[t]; !ok {
+			continue
+		} else if len(r) < 2 {
+			return nil, errors.New("继电器标签字符值至少两位,例如A1")
+		} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
+			return nil, errors.New(fmt.Sprintf("继电器标签模式不匹配: %s, 必须如A1,2,3,4", err))
+		} else {
+			return Relay{r[0]: r[1:]}, nil
+		}
+	}
+	return nil, errors.New("继电器标签不存在")
+}
+
+func NewCoordinate(tag map[string]string) (*Coordinate, error) {
+	var (
+		w, g = "", ""
+		attr = []*D3{
+			{name: "行", tag: TagRow},
+			{name: "列", tag: TagColumn},
+			{name: "层", tag: TagLayer},
+		}
+	)
+	for i, s := range attr {
+		for _, r := range strings.Split(s.tag, "|") {
+			if v, ok := tag[r]; ok {
+				value, err := strconv.Atoi(v)
+				if err != nil {
+					return nil, errors.New(fmt.Sprintf("解析 %s 错误: %s", s.name, err))
+				}
+				attr[i].value = uint16(value)
+				break
+			}
+		}
+	}
+
+	for _, r := range strings.Split(TagWarehouse, "|") {
+		if v, ok := tag[r]; ok {
+			w = v
+			break
+		}
+	}
+	for _, r := range strings.Split(TagGroup, "|") {
+		if v, ok := tag[r]; ok {
+			g = v
+			break
+		}
+	}
+	//row, err = strconv.Atoi(tag[TagRow])
+	//if err != nil {
+	//	//log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.Config.Host, channelId, v.ZoneName, err))
+	//	return nil
+	//}
+	//column, err = strconv.Atoi(tag[TagColumn])
+	//if err != nil {
+	//	//log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.Config.Host, channelId, v.ZoneName, err))
+	//	return nil
+	//}
+	//layer, err = strconv.Atoi(tag[TagLayer])
+	//if err != nil {
+	//	//log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.Config.Host, channelId, v.ZoneName, err))
+	//	return nil
+	//}
+	return &Coordinate{
+		Warehouse: w,
+		Group:     g,
+		Row:       attr[0].value,
+		Column:    attr[1].value,
+		Layer:     attr[2].value,
+	}, nil
 }
