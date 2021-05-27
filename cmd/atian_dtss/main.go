@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/robfig/cron/v3"
 	"github.com/zing-dev/atian-tools/source/atian/dts"
+	"github.com/zing-dev/atian-tools/source/device"
 	"log"
 	"os"
 	"os/signal"
@@ -21,6 +22,8 @@ type Core struct {
 	configs []dts.Config
 
 	locker sync.Mutex
+
+	WarehouseZones map[string]map[string]dts.Zones
 }
 
 func main() {
@@ -30,9 +33,10 @@ func main() {
 		cancel: cancel,
 		apps:   map[string]*dts.App{},
 		configs: []dts.Config{
-			{ChannelNum: 4, Host: "192.168.0.86"},
-			{EnableRelay: false, EnableWarehouse: false, ChannelNum: 4, Host: "192.168.0.215"},
+			{DeviceId: 1, ChannelNum: 4, Host: "192.168.0.86"},
+			{DeviceId: 2, EnableRelay: true, EnableWarehouse: true, ChannelNum: 4, Host: "192.168.0.215"},
 		},
+		WarehouseZones: map[string]map[string]dts.Zones{},
 	}
 	for _, config := range core.configs {
 		go func(config dts.Config) {
@@ -58,6 +62,24 @@ func main() {
 					return
 				case status := <-app.ChanStatus:
 					log.Println("status", status.String())
+					if status == device.Connected {
+						log.Println("开始配置新能源防区结构层级...")
+						core.locker.Lock()
+						for _, zone := range app.Zones {
+							if zone.Warehouse == "" || zone.Group == "" {
+								continue
+							}
+							if len(core.WarehouseZones[zone.Warehouse]) == 0 {
+								core.WarehouseZones[zone.Warehouse] = map[string]dts.Zones{}
+							}
+							if len(core.WarehouseZones[zone.Warehouse][zone.Group]) == 0 {
+								core.WarehouseZones[zone.Warehouse][zone.Group] = dts.Zones{}
+							}
+							core.WarehouseZones[zone.Warehouse][zone.Group] = append(core.WarehouseZones[zone.Warehouse][zone.Group], zone)
+						}
+						core.locker.Unlock()
+						log.Println("配置新能源防区结构层级结束...")
+					}
 				case temp := <-app.ChanZonesTemp:
 					log.Println("temp", temp.Host)
 				case sign := <-app.ChanChannelSignal:

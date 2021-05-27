@@ -218,10 +218,10 @@ type (
 
 	// ZonesTemp DTS所有防区温度
 	ZonesTemp struct {
-		DeviceId  string    `json:"device_id"`
-		Host      string    `json:"host,omitempty"`
-		CreatedAt TimeLocal `json:"created_at"`
-		Zones     Zones     `json:"zones"`
+		DeviceId  string     `json:"device_id"`
+		Host      string     `json:"host,omitempty"`
+		CreatedAt *TimeLocal `json:"created_at"`
+		Zones     Zones      `json:"zones"`
 	}
 
 	// ZonesAlarm 报警防区信息集合

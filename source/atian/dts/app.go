@@ -125,7 +125,12 @@ func (a *App) call() {
 			a.ZonesTemp.Store(notify.GetDeviceID(), notify)
 			zones := make(Zones, len(notify.GetZones()))
 			for i, zone := range notify.GetZones() {
-				zones[i] = a.GetZone(Id(a.Config.DeviceId, uint(zone.ID)))
+				id := Id(a.Config.DeviceId, uint(zone.GetID()))
+				zones[i] = a.GetZone(id)
+				if zones[i] == nil {
+					log.L.Error(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id))
+					continue
+				}
 				zones[i].Temperature = &Temperature{
 					Max: zone.GetMaxTemperature(),
 					Avg: zone.GetAverageTemperature(),
@@ -136,7 +141,7 @@ func (a *App) call() {
 			case a.ChanZonesTemp <- ZonesTemp{
 				DeviceId:  notify.GetDeviceID(),
 				Host:      a.Config.Host,
-				CreatedAt: TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+				CreatedAt: &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 				Zones:     zones,
 			}:
 			default:
@@ -215,9 +220,10 @@ func (a *App) call() {
 			}
 			alarms := make(Zones, len(zones))
 			for k, v := range zones {
-				zone := a.GetZone(uint(v.GetID()))
+				id := Id(a.Config.DeviceId, uint(v.GetID()))
+				zone := a.GetZone(id)
 				if zone == nil {
-					log.L.Error("没有找到该防区: ", v.GetID())
+					log.L.Error(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id))
 					continue
 				}
 				alarms[k] = zone
@@ -322,15 +328,17 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 		zones[k] = new(Zone)
 		zones[k].BaseZone = BaseZone{
 			Id:        id,
-			Name:      v.ZoneName,
-			ChannelId: byte(v.ChannelID),
-			Start:     v.Start,
-			Finish:    v.Finish,
+			Name:      v.GetZoneName(),
+			ChannelId: byte(v.GetChannelID()),
+			Start:     v.GetStart(),
+			Finish:    v.GetFinish(),
 			Host:      a.Config.Host,
 		}
-		if v.Tag != "" {
-			zones[k].Tag = DecodeTags(v.Tag)
+		if v.Tag != "" && (a.Config.EnableRelay || a.Config.EnableWarehouse) {
+			log.L.Warn(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 标签为空", a.Config.Host, channelId, v.ZoneName))
+			continue
 		}
+		zones[k].Tag = DecodeTags(v.GetTag())
 		if a.Config.EnableRelay {
 			r, ok := zones[k].Tag[TagRelay]
 			if !ok {
@@ -348,17 +356,17 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 				row, column, layer = 0, 0, 0
 				err                error
 			)
-			row, err = strconv.Atoi(a.Zones[id].Tag[TagRow])
+			row, err = strconv.Atoi(zones[k].Tag[TagRow])
 			if err != nil {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 行失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
 			}
-			column, err = strconv.Atoi(a.Zones[id].Tag[TagColumn])
+			column, err = strconv.Atoi(zones[k].Tag[TagColumn])
 			if err != nil {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 列失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
 			}
-			layer, err = strconv.Atoi(a.Zones[id].Tag[TagLayer])
+			layer, err = strconv.Atoi(zones[k].Tag[TagLayer])
 			if err != nil {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 层失败: %s", a.Config.Host, channelId, v.ZoneName, err))
 				continue
@@ -370,6 +378,7 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 				Column:    column,
 				Layer:     layer,
 			}
+			log.L.Info(zones[k])
 		}
 	}
 	return zones, nil
