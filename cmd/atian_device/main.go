@@ -34,7 +34,7 @@ func (d *DTS) GetStatus() device.StatusType {
 	return device.Connecting
 }
 
-func (d *DTS) Cron(cron *cron.Cron) {
+func (d *DTS) SetCron(cron *cron.Cron) {
 }
 
 func (d *DTS) Run() {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/robfig/cron/v3"
 	"github.com/zing-dev/atian-tools/source/atian/dts"
 	"log"
 	"os"
@@ -29,18 +30,26 @@ func main() {
 		cancel: cancel,
 		apps:   map[string]*dts.App{},
 		configs: []dts.Config{
-			{EnableRelay: false, EnableWarehouse: false, ChannelNum: 4, Host: "192.168.0.86"},
+			{ChannelNum: 4, Host: "192.168.0.86"},
 			{EnableRelay: false, EnableWarehouse: false, ChannelNum: 4, Host: "192.168.0.215"},
 		},
 	}
 	for _, config := range core.configs {
 		go func(config dts.Config) {
 			app := dts.New(core.ctx, config)
+			app.Cron = cron.New(cron.WithSeconds())
 			core.locker.Lock()
 			core.apps[config.Host] = app
 			core.locker.Unlock()
+			id, err := app.Cron.AddFunc("*/10 * * * * *", func() {
+				log.Println("cron ", app.Config.Host)
+			})
+			if err != nil {
+				return
+			}
+			app.CronIds[byte(id)] = id
+			app.Cron.Start()
 			app.Run()
-
 			for {
 				select {
 				case <-app.Context.Done():
@@ -50,23 +59,23 @@ func main() {
 				case status := <-app.ChanStatus:
 					log.Println("status", status.String())
 				case temp := <-app.ChanZonesTemp:
-					log.Println("temp", temp.DeviceId)
+					log.Println("temp", temp.Host)
 				case sign := <-app.ChanChannelSignal:
-					log.Println("sign", sign.DeviceId)
+					log.Println("sign", sign.Host, sign.ChannelId)
 				case event := <-app.ChanChannelEvent:
-					log.Println("event", event.DeviceId)
+					log.Println("event", event.Host)
 				case alarm := <-app.ChanZonesAlarm:
-					log.Println("alarm start", alarm.DeviceId)
+					log.Println("alarm start", alarm.Host, dts.GetAlarmTypeString(alarm.Zones[0].AlarmType))
 					time.Sleep(time.Second)
-					log.Println("alarm over", alarm.DeviceId)
+					log.Println("alarm over", alarm.Host, dts.GetAlarmTypeString(alarm.Zones[0].AlarmType))
 				}
 			}
 		}(config)
 	}
 
-	time.AfterFunc(time.Second*20, func() {
+	time.AfterFunc(time.Minute, func() {
 		core.locker.Lock()
-		core.apps[core.configs[0].Host].Cancel()
+		core.apps[core.configs[1].Host].Close()
 		core.locker.Unlock()
 	})
 

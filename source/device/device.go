@@ -11,6 +11,7 @@ const (
 	_ Type = iota
 	TypeDTS
 	TypeRelay
+	TypeApi
 )
 
 const (
@@ -28,6 +29,19 @@ const (
 	Connected
 	Disconnect
 )
+
+func (s *StatusType) String() string {
+	switch *s {
+	case Connecting:
+		return "连接中"
+	case Connected:
+		return "已连接"
+	case Disconnect:
+		return "已断开"
+	default:
+		return "未知状态"
+	}
+}
 
 type (
 	Type       byte
@@ -55,6 +69,7 @@ type (
 		Run()
 
 		Close()
+		SetCron(*cron.Cron)
 	}
 )
 
@@ -99,7 +114,8 @@ func (m *Manger) RegisterEvent(eventType EventType, lister CallListener) {
 func (m *Manger) Adds(devices ...Device) {
 	for _, device := range devices {
 		m.devices.Store(device.GetId(), device)
-		m.omit(EventListener{
+		device.SetCron(m.Cron) //定时任务
+		m.emit(EventListener{
 			Device:    device,
 			EventType: EventAdd,
 		})
@@ -108,7 +124,7 @@ func (m *Manger) Adds(devices ...Device) {
 
 func (m *Manger) Add(device Device) {
 	m.devices.Store(device.GetId(), device)
-	m.omit(EventListener{
+	m.emit(EventListener{
 		Device:    device,
 		EventType: EventAdd,
 	})
@@ -116,7 +132,7 @@ func (m *Manger) Add(device Device) {
 
 func (m *Manger) Update(device Device) {
 	m.devices.Store(device.GetId(), device)
-	m.omit(EventListener{
+	m.emit(EventListener{
 		Device:    device,
 		EventType: EventUpdate,
 	})
@@ -124,7 +140,7 @@ func (m *Manger) Update(device Device) {
 
 func (m *Manger) Delete(device Device) {
 	m.devices.LoadAndDelete(device.GetId())
-	m.omit(EventListener{
+	m.emit(EventListener{
 		Device:    device,
 		EventType: EventDelete,
 	})
@@ -172,7 +188,7 @@ func (m *Manger) Length() (length int) {
 	return
 }
 
-func (m *Manger) omit(event EventListener) {
+func (m *Manger) emit(event EventListener) {
 	select {
 	case m.event <- event:
 	default:

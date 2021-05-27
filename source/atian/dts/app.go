@@ -24,18 +24,21 @@ type Config struct {
 	//ZonesAlarmInterval 防区温度间隔秒
 	ZonesAlarmInterval byte
 	//ZonesTempInterval 报警温度间隔秒
-	ZonesTempInterval byte
+	ZonesTempInterval uint16
+	ZonesSignInterval uint16
 }
 
 type App struct {
 	Context context.Context
-	Cancel  context.CancelFunc
+	cancel  context.CancelFunc
 
 	Client *dtssdk.Client
 	Config Config
 
-	status     Status
-	ChanStatus chan Status
+	Cron       *cron.Cron
+	CronIds    map[byte]cron.EntryID
+	status     device.StatusType
+	ChanStatus chan device.StatusType
 
 	ChanZonesTemp     chan ZonesTemp
 	ChanChannelSignal chan ChannelSignal
@@ -43,31 +46,36 @@ type App struct {
 	ChanZonesAlarm    chan ZonesAlarm
 	Zones             map[uint]*Zone
 
-	ZonesTemp  sync.Map
-	ZonesAlarm sync.Map
-	locker     sync.Mutex
+	ZonesChannelSignal sync.Map
+	ZonesTemp          sync.Map
+	ZonesAlarm         sync.Map
+	locker             sync.Mutex
 }
 
 func New(ctx context.Context, config Config) *App {
 	if config.ZonesAlarmInterval <= 0 {
-		config.ZonesAlarmInterval = 10
+		config.ZonesAlarmInterval = 20
 	}
 
 	if config.ZonesTempInterval <= 0 {
-		config.ZonesTempInterval = 30
+		config.ZonesTempInterval = 60
+	}
+	if config.ZonesSignInterval <= 0 {
+		config.ZonesSignInterval = 60
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	return &App{
 		Context:           ctx,
-		Cancel:            cancel,
+		cancel:            cancel,
 		Config:            config,
-		ChanStatus:        make(chan Status, 0),
+		ChanStatus:        make(chan device.StatusType, 0),
 		ChanZonesTemp:     make(chan ZonesTemp, 30),
 		ChanChannelSignal: make(chan ChannelSignal, 10),
 		ChanChannelEvent:  make(chan ChannelEvent, 10),
 		ChanZonesAlarm:    make(chan ZonesAlarm, 30),
 		Zones:             map[uint]*Zone{},
+		CronIds:           map[byte]cron.EntryID{},
 		locker:            sync.Mutex{},
 	}
 }
@@ -81,28 +89,27 @@ func (a *App) GetType() device.Type {
 }
 
 func (a *App) GetStatus() device.StatusType {
-	return device.StatusType(a.Status())
+	return a.Status()
 }
-
-func (a *App) Cron(*cron.Cron) {}
 
 func (a *App) Run() {
 	a.Client = dtssdk.NewDTSClient(a.Config.Host)
+	a.setStatus(device.Disconnect)
 	a.Client.CallConnected(func(s string) {
 		log.L.Info(fmt.Sprintf("主机为 %s 的dts连接成功", s))
-		a.setStatus(StatusOnline)
+		a.setStatus(device.Connected)
 		go a.SyncZones()
 		a.call()
 	})
 
 	a.Client.OnTimeout(func(s string) {
 		log.L.Warn(fmt.Sprintf("主机为 %s 的dts连接超时", s))
-		a.setStatus(StatusOff)
+		a.setStatus(device.Connecting)
 	})
 
 	a.Client.CallDisconnected(func(s string) {
 		log.L.Warn(fmt.Sprintf("主机为 %s 的dts断开连接", s))
-		a.setStatus(StatusOff)
+		a.setStatus(device.Disconnect)
 	})
 }
 
@@ -141,6 +148,26 @@ func (a *App) call() {
 		}
 
 		err = a.Client.CallTempSignalNotify(func(notify *model.TempSignalNotify, err error) {
+			value, ok := a.ZonesChannelSignal.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), notify.ChannelID), notify)
+			if ok && time.Now().Sub(time.Unix(value.(*model.TempSignalNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ZonesSignInterval) {
+				return
+			}
+			length := len(notify.GetSignal())
+			if length == 0 {
+				log.L.Error(fmt.Sprintf("主机为 %s 通道 %d 的dts信号数据为空!", a.Config.Host, notify.GetChannelID()))
+				return
+			}
+			if length > 10 {
+				signal := notify.GetSignal()
+				divide := length / 5
+				if signal[0] == 0 && signal[divide*1] == 0 && signal[divide*2] == 0 && signal[divide*3] == 0 &&
+					signal[divide*4] == 0 && signal[divide*5-1] == 0 {
+					log.L.Error(fmt.Sprintf("主机为 %s 通道 %d 的dts信号异常!", a.Config.Host, notify.GetChannelID()))
+					return
+				}
+			}
+
+			a.ZonesChannelSignal.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), notify.ChannelID), notify)
 			signal := ChannelSignal{
 				DeviceId:   notify.GetDeviceID(),
 				ChannelId:  notify.GetChannelID(),
@@ -242,17 +269,24 @@ func (a *App) call() {
 	}
 }
 
-func (a *App) Close() {
-	a.Cancel()
+func (a *App) SetCron(cron *cron.Cron) {
+	a.Cron = cron
 }
 
-func (a *App) Status() Status {
+func (a *App) Close() {
+	for _, id := range a.CronIds {
+		a.Cron.Remove(id)
+	}
+	a.cancel()
+}
+
+func (a *App) Status() device.StatusType {
 	a.locker.Lock()
 	defer a.locker.Unlock()
 	return a.status
 }
 
-func (a *App) setStatus(s Status) {
+func (a *App) setStatus(s device.StatusType) {
 	a.locker.Lock()
 	a.status = s
 	a.locker.Unlock()

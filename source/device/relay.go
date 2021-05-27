@@ -39,6 +39,10 @@ func (r *Relay) GetType() Type {
 	return TypeRelay
 }
 
+func (r *Relay) SetCron(cron *cron.Cron) {
+	r.Cron = cron
+}
+
 func (r *Relay) setStatus(t StatusType) {
 	r.locker.Lock()
 	defer r.locker.Unlock()
