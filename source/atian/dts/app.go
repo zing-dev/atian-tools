@@ -130,20 +130,30 @@ func (a *App) call() {
 			}
 			a.ZonesTemp.Store(notify.GetDeviceID(), notify)
 			zones := make(Zones, len(notify.GetZones()))
-			for i, zone := range notify.GetZones() {
+			index := 0
+			for _, zone := range notify.GetZones() {
+				if zone.GetMaxTemperature() == zone.GetMinTemperature() &&
+					zone.GetAverageTemperature() == zone.GetMaxTemperature() &&
+					zone.GetAverageTemperature() == 0 {
+					continue
+				}
 				id := Id(a.Config.DeviceId, uint(zone.GetID()))
-				zones[i] = a.GetZone(id)
-				if zones[i] == nil {
+				z := a.GetZone(id)
+				if z == nil {
 					a.setMessage(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id), logrus.ErrorLevel)
 					continue
 				}
-				zones[i].Temperature = &Temperature{
+
+				zones[index] = z
+				zones[index].Temperature = &Temperature{
 					Max: zone.GetMaxTemperature(),
 					Avg: zone.GetAverageTemperature(),
 					Min: zone.GetMinTemperature(),
 					At:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 				}
+				index++
 			}
+			zones = zones[:index]
 			select {
 			case a.ChanZonesTemp <- ZonesTemp{
 				DeviceId:  notify.GetDeviceID(),
@@ -238,6 +248,7 @@ func (a *App) call() {
 					Max: v.GetMaxTemperature(),
 					Avg: v.GetAverageTemperature(),
 					Min: v.GetMinTemperature(),
+					At:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
 				}
 				alarms[k].Alarm = &Alarm{
 					At:       &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
