@@ -16,6 +16,7 @@ import (
 const SectionName = "BeiDaBlueBird-WebService"
 
 type Config struct {
+	Debug         bool   `comment:"是否为调试模式"`
 	MapFile       string `comment:"防区和设备的映射文件,必须是xlsx文件(例 ./map_file.xlsx)"`
 	SerialPort    string `comment:"串口地址(例 COM1)"`
 	WebServiceUrl string `comment:"webservice接收报警地址(例 http://127.0.0.1/webservice)"`
@@ -88,14 +89,19 @@ func main() {
 	app.service = q5.NewIDtsWcfService(soap.NewClient(app.config.WebServiceUrl, soap.WithTimeout(time.Second*3)))
 	sensation := beida_bluebird.New(app.ctx, &beida_bluebird.Config{Port: app.config.SerialPort, MapFile: app.config.MapFile})
 	go sensation.Run()
-
 	for {
 		select {
 		case <-app.ctx.Done():
 			return
 		default:
 			protocol := sensation.Protocol()
-			if protocol.IsTypeSmokeSensation() {
+			if app.config.Debug {
+				log.L.Info(protocol)
+			}
+			if protocol.IsCmdAlarm() {
+				log.L.Warn("产生了一个新的报警信息...")
+			}
+			if protocol.IsTypeSmokeSensation() || protocol.PartType == beida_bluebird.PartTypeManual {
 				m := &beida_bluebird.Map{
 					Controller: protocol.Controller,
 					Loop:       protocol.Loop,
@@ -103,11 +109,15 @@ func main() {
 					PartType:   protocol.PartType,
 				}
 				list := sensation.Maps.Get(m.Key())
-				if list == nil {
+				if list == nil || len(list) == 0 {
 					log.L.Error(fmt.Sprintf("未找到当前的报警防区[控制器号 %d,回路号 %d,部位号 %d,部件类型 %d]", m.Controller, m.Loop, m.Part, m.PartType))
 					continue
 				}
-
+				names := "报警防区: "
+				for _, zone := range list {
+					names += fmt.Sprintf("%s, ", zone.Name)
+				}
+				log.L.Warn(names)
 				for _, item := range list {
 					if protocol.IsCmdFailure() {
 						response, err := app.service.DeviceWarn(&q5.DeviceWarn{
@@ -115,12 +125,16 @@ func main() {
 							WarnContext: item.String(),
 						})
 						if err != nil {
-							log.L.Error("FireWarn err: ", err)
+							log.L.Error("故障报警失败: ", err)
 							continue
 						}
 
-						if response.DeviceWarnResult {
+						if !response.DeviceWarnResult {
+							log.L.Error("故障报警返回信息: ", response.Msg)
 							continue
+						}
+						if response.DeviceWarnResult {
+							log.L.Info("故障报警返回信息: ", response.Msg)
 						}
 					}
 
@@ -130,12 +144,15 @@ func main() {
 							WarnContext: item.String(),
 						})
 						if err != nil {
-							log.L.Error("FireWarn err: ", err)
+							log.L.Error("烟感报警失败: ", err)
 							continue
 						}
-
-						if response.FireWarnResult {
+						if !response.FireWarnResult {
+							log.L.Error("烟感报警返回信息: ", response.Msg)
 							continue
+						}
+						if response.FireWarnResult {
+							log.L.Info("烟感报警返回信息: ", response.Msg)
 						}
 					}
 				}

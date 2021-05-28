@@ -117,7 +117,12 @@ func (a *App) Run() {
 
 func (a *App) call() {
 	var err = errors.New("")
+	start := time.Now()
 	for err != nil {
+		if time.Now().Sub(start) > time.Minute {
+			a.setMessage(fmt.Sprintf("主机为 %s 的dts 回调数据失败", a.Config.Host), logrus.ErrorLevel)
+			break
+		}
 		err = a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
 			value, ok := a.ZonesTemp.LoadOrStore(notify.GetDeviceID(), notify)
 			if ok && time.Now().Sub(time.Unix(value.(*model.ZoneTempNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ZonesTempInterval) {
@@ -272,7 +277,7 @@ func (a *App) call() {
 		})
 		if err != nil {
 			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
-			time.Sleep(time.Second / 10)
+			time.Sleep(time.Second * 3)
 			continue
 		}
 	}

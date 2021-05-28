@@ -220,7 +220,7 @@ func (a *App) handle(data []byte) {
 	for a.cache.Len() >= DataLength {
 		n, err := a.cache.Read(data)
 		if n < DataLength {
-			log.L.Error("get data's length is not 26")
+			log.L.Error("get data's length is not 26 ", data)
 			return
 		}
 		if err != nil {
@@ -230,7 +230,7 @@ func (a *App) handle(data []byte) {
 		copy(d26[:], data)
 		err = a.protocol.Decode(d26)
 		if err != nil {
-			log.L.Error("decode the data err: ", err)
+			log.L.Error(fmt.Sprintf("decode the data %v err: %s", d26, err))
 			return
 		}
 		select {

@@ -69,7 +69,7 @@ func (r *Relay) Reset(branch string) {
 		r.setStatus(Disconnect)
 		return
 	}
-	r.setStatus(Connecting)
+	r.setStatus(Connected)
 }
 
 func (r *Relay) Alarm(branch string) {
@@ -86,7 +86,7 @@ func (r *Relay) Alarm(branch string) {
 		r.setStatus(Disconnect)
 		return
 	}
-	r.setStatus(Connecting)
+	r.setStatus(Connected)
 }
 
 func (r *Relay) ping() {
@@ -104,9 +104,11 @@ func (r *Relay) ping() {
 }
 
 func (r *Relay) Run() {
+	r.status = Connecting
 	r.Client = http.Client{
 		Timeout: time.Second * 3,
 	}
+	r.ping()
 	id, err := r.Cron.AddFunc("* */1 * * * *", r.ping)
 	if err != nil {
 		return
