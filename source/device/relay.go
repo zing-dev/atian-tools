@@ -55,6 +55,23 @@ func (r *Relay) GetStatus() StatusType {
 	return r.status
 }
 
+func (r *Relay) Reset(branch string) {
+	url := fmt.Sprintf("%s/api/off/%s", r.Url, branch)
+	if branch == "" {
+		url = fmt.Sprintf("%s/api/off-all", r.Url)
+	}
+	resp, err := r.Client.Get(url)
+	if err != nil {
+		r.setStatus(Disconnect)
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		r.setStatus(Disconnect)
+		return
+	}
+	r.setStatus(Connecting)
+}
+
 func (r *Relay) Alarm(branch string) {
 	host := fmt.Sprintf("%s/api/on/%s", r.Url, branch)
 	if r.ResetTime != "" {

@@ -4,12 +4,53 @@ import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
 	"github.com/kataras/neffos"
+	"github.com/zing-dev/atian-tools/source/device"
 	"log"
 )
 
+const (
+	_ Type = iota
+	TypeLog
+	TypeAlarm
+	TypeTemp
+	TypeChannelSign
+	TypeEvent
+	TypeDevice
+)
+
+type Type byte
+
+func (t *Type) String() string {
+	switch *t {
+	case TypeLog:
+		return "日志"
+	case TypeAlarm:
+		return "报警"
+	case TypeTemp:
+		return "防区温度"
+	case TypeChannelSign:
+		return "通道温度信号"
+	case TypeEvent:
+		return "通道光纤事件"
+	case TypeDevice:
+		return "设备"
+	default:
+		return "未知"
+	}
+}
+
+func GetWebsocketTypeMap() []device.Constant {
+	t := []Type{TypeLog, TypeAlarm, TypeTemp, TypeChannelSign, TypeEvent, TypeDevice}
+	constant := make([]device.Constant, len(t))
+	for i, state := range t {
+		constant[i] = device.Constant{Name: state.String(), Value: byte(state)}
+	}
+	return constant
+}
+
 type Response struct {
 	Success bool        `json:"success"`
-	Type    string      `json:"type"`
+	Type    Type        `json:"type"`
 	Data    interface{} `json:"data"`
 }
 
@@ -42,7 +83,7 @@ func Write(data interface{}, server *neffos.Server) {
 	Send(body, server)
 }
 
-func WriteToWebsockets(t string, data interface{}) {
+func WriteToWebsockets(t Type, data interface{}) {
 	if server == nil {
 		return
 	}
@@ -58,7 +99,7 @@ func WriteToWebsockets(t string, data interface{}) {
 	Send(body, server)
 }
 
-func WriteToWebsocket(t string, data interface{}, connections ...*websocket.Conn) {
+func WriteToWebsocket(t Type, data interface{}, connections ...*websocket.Conn) {
 	for _, conn := range connections {
 		err := conn.WriteJSON(Response{
 			Success: true,

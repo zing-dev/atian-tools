@@ -129,8 +129,9 @@ type (
 	}
 
 	Constant struct {
-		Name  string `json:"name"`
-		Value byte   `json:"value"`
-		Color string `json:"color,omitempty"`
+		Name   string `json:"name"`
+		Value  byte   `json:"value"`
+		Color  string `json:"color,omitempty"`
+		Commit string `json:"commit,omitempty"`
 	}
 )
