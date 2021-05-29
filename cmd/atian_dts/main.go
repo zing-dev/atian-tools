@@ -16,6 +16,7 @@ func main() {
 		ChannelNum:      4,
 		Host:            "192.168.0.215",
 	})
+	app.CallTypes = []dts.CallType{dts.CallAlarm, dts.CallTemp, dts.CallEvent}
 	app.Run()
 	go func() {
 		for {

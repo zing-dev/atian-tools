@@ -14,6 +14,15 @@ import (
 	"time"
 )
 
+const (
+	CallAlarm CallType = iota
+	CallTemp
+	CallSignal
+	CallEvent
+)
+
+type CallType byte
+
 type Config struct {
 	DeviceId        uint
 	EnableWarehouse bool
@@ -35,8 +44,11 @@ type App struct {
 	Client *dtssdk.Client
 	Config Config
 
-	Cron       *cron.Cron
-	CronIds    map[byte]cron.EntryID
+	CallTypes []CallType
+
+	Cron    *cron.Cron
+	CronIds map[byte]cron.EntryID
+
 	status     device.StatusType
 	ChanStatus chan device.StatusType
 
@@ -95,6 +107,9 @@ func (a *App) GetStatus() device.StatusType {
 }
 
 func (a *App) Run() {
+	if len(a.CallTypes) == 0 {
+		a.CallTypes = []CallType{CallAlarm, CallTemp}
+	}
 	a.Client = dtssdk.NewDTSClient(a.Config.Host)
 	a.setStatus(device.Disconnect)
 	a.Client.CallConnected(func(s string) {
@@ -118,178 +133,185 @@ func (a *App) Run() {
 func (a *App) call() {
 	var err = errors.New("")
 	start := time.Now()
+START:
 	for err != nil {
 		if time.Now().Sub(start) > time.Minute {
 			a.setMessage(fmt.Sprintf("主机为 %s 的dts 回调数据失败", a.Config.Host), logrus.ErrorLevel)
 			break
 		}
-		err = a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
-			value, ok := a.ZonesTemp.LoadOrStore(notify.GetDeviceID(), notify)
-			if ok && time.Now().Sub(time.Unix(value.(*model.ZoneTempNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ZonesTempInterval) {
-				return
-			}
-			a.ZonesTemp.Store(notify.GetDeviceID(), notify)
-			zones := make(Zones, len(notify.GetZones()))
-			index := 0
-			for _, zone := range notify.GetZones() {
-				if zone.GetMaxTemperature() == zone.GetMinTemperature() &&
-					zone.GetAverageTemperature() == zone.GetMaxTemperature() &&
-					zone.GetAverageTemperature() == 0 {
-					continue
+		for _, t := range a.CallTypes {
+			switch t {
+			case CallAlarm:
+				a.ChanZonesAlarm = make(chan ZonesAlarm, 10)
+				err = a.Client.CallZoneAlarmNotify(func(notify *model.ZoneAlarmNotify, err error) {
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", a.Config.Host), logrus.WarnLevel)
+					zones := make([]*model.DefenceZone, 0)
+					for _, zone := range notify.GetZones() {
+						value, ok := a.ZonesTemp.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), Id(a.Config.DeviceId, uint(zone.ID))), notify.GetTimestamp())
+						if ok && time.Now().Sub(time.Unix(value.(int64)/1000, 0)) < time.Second*time.Duration(a.Config.ZonesAlarmInterval) {
+							return
+						}
+						a.ZonesTemp.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), Id(a.Config.DeviceId, uint(zone.ID))), notify.GetTimestamp())
+						zones = append(zones, zone)
+					}
+					length := len(zones)
+					if length == 0 {
+						a.setMessage(fmt.Sprintf("主机为 %s 的dts更新防区温度数量为空!", a.Config.Host), logrus.ErrorLevel)
+						return
+					}
+					if length > 10 {
+						divide := length / 5
+						if zones[0].AverageTemperature == 0 && zones[divide*1].AverageTemperature == 0 &&
+							zones[divide*2].AverageTemperature == 0 && zones[divide*3].AverageTemperature == 0 &&
+							zones[divide*4].AverageTemperature == 0 && zones[divide*5-1].AverageTemperature == 0 {
+							a.setMessage(fmt.Sprintf("主机为 %s 的dts更新防区温度异常!", a.Config.Host), logrus.ErrorLevel)
+							return
+						}
+					}
+					alarms := make(Zones, len(zones))
+					for k, v := range zones {
+						id := Id(a.Config.DeviceId, uint(v.GetID()))
+						zone := a.GetZone(id)
+						if zone == nil {
+							a.setMessage(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id), logrus.ErrorLevel)
+							continue
+						}
+						alarms[k] = zone
+						alarms[k].Temperature = &Temperature{
+							Max: v.GetMaxTemperature(),
+							Avg: v.GetAverageTemperature(),
+							Min: v.GetMinTemperature(),
+							At:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+						}
+						alarms[k].Alarm = &Alarm{
+							At:       &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+							Location: v.GetAlarmLoc(),
+							State:    v.GetAlarmType(),
+						}
+					}
+					select {
+					case a.ChanZonesAlarm <- ZonesAlarm{
+						Zones:     alarms,
+						DeviceId:  notify.GetDeviceID(),
+						Host:      a.Config.Host,
+						CreatedAt: &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+					}:
+					default:
+					}
+				})
+				if err != nil {
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受报警回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
+					time.Sleep(time.Second * 3)
+					break START
 				}
-				id := Id(a.Config.DeviceId, uint(zone.GetID()))
-				z := a.GetZone(id)
-				if z == nil {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id), logrus.ErrorLevel)
-					continue
-				}
+			case CallTemp:
+				a.ChanZonesTemp = make(chan ZonesTemp, 30)
+				err = a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
+					value, ok := a.ZonesTemp.LoadOrStore(notify.GetDeviceID(), notify)
+					if ok && time.Now().Sub(time.Unix(value.(*model.ZoneTempNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ZonesTempInterval) {
+						return
+					}
+					a.ZonesTemp.Store(notify.GetDeviceID(), notify)
+					zones := make(Zones, len(notify.GetZones()))
+					index := 0
+					for _, zone := range notify.GetZones() {
+						if zone.GetMaxTemperature() == zone.GetMinTemperature() &&
+							zone.GetAverageTemperature() == zone.GetMaxTemperature() &&
+							zone.GetAverageTemperature() == 0 {
+							continue
+						}
+						id := Id(a.Config.DeviceId, uint(zone.GetID()))
+						z := a.GetZone(id)
+						if z == nil {
+							a.setMessage(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id), logrus.ErrorLevel)
+							continue
+						}
 
-				zones[index] = z
-				zones[index].Temperature = &Temperature{
-					Max: zone.GetMaxTemperature(),
-					Avg: zone.GetAverageTemperature(),
-					Min: zone.GetMinTemperature(),
-					At:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+						zones[index] = z
+						zones[index].Temperature = &Temperature{
+							Max: zone.GetMaxTemperature(),
+							Avg: zone.GetAverageTemperature(),
+							Min: zone.GetMinTemperature(),
+							At:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+						}
+						index++
+					}
+					zones = zones[:index]
+					select {
+					case a.ChanZonesTemp <- ZonesTemp{
+						DeviceId:  notify.GetDeviceID(),
+						Host:      a.Config.Host,
+						CreatedAt: &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+						Zones:     zones,
+					}:
+					default:
+					}
+				})
+				if err != nil {
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受温度回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
+					break START
 				}
-				index++
-			}
-			zones = zones[:index]
-			select {
-			case a.ChanZonesTemp <- ZonesTemp{
-				DeviceId:  notify.GetDeviceID(),
-				Host:      a.Config.Host,
-				CreatedAt: &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
-				Zones:     zones,
-			}:
-			default:
-			}
-		})
-		if err != nil {
-			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受温度回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
-			time.Sleep(time.Second * 3)
-			continue
-		}
+			case CallSignal:
+				a.ChanChannelSignal = make(chan ChannelSignal, 30)
+				err = a.Client.CallTempSignalNotify(func(notify *model.TempSignalNotify, err error) {
+					value, ok := a.ZonesChannelSignal.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), notify.ChannelID), notify)
+					if ok && time.Now().Sub(time.Unix(value.(*model.TempSignalNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ZonesSignInterval) {
+						return
+					}
+					length := len(notify.GetSignal())
+					if length == 0 {
+						a.setMessage(fmt.Sprintf("主机为 %s 通道 %d 的dts信号数据为空!", a.Config.Host, notify.GetChannelID()), logrus.ErrorLevel)
+						return
+					}
+					if length > 10 {
+						signal := notify.GetSignal()
+						divide := length / 5
+						if signal[0] == 0 && signal[divide*1] == 0 && signal[divide*2] == 0 && signal[divide*3] == 0 &&
+							signal[divide*4] == 0 && signal[divide*5-1] == 0 {
+							a.setMessage(fmt.Sprintf("主机为 %s 通道 %d 的dts信号异常!", a.Config.Host, notify.GetChannelID()), logrus.ErrorLevel)
+							return
+						}
+					}
 
-		err = a.Client.CallTempSignalNotify(func(notify *model.TempSignalNotify, err error) {
-			value, ok := a.ZonesChannelSignal.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), notify.ChannelID), notify)
-			if ok && time.Now().Sub(time.Unix(value.(*model.TempSignalNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ZonesSignInterval) {
-				return
-			}
-			length := len(notify.GetSignal())
-			if length == 0 {
-				a.setMessage(fmt.Sprintf("主机为 %s 通道 %d 的dts信号数据为空!", a.Config.Host, notify.GetChannelID()), logrus.ErrorLevel)
-				return
-			}
-			if length > 10 {
-				signal := notify.GetSignal()
-				divide := length / 5
-				if signal[0] == 0 && signal[divide*1] == 0 && signal[divide*2] == 0 && signal[divide*3] == 0 &&
-					signal[divide*4] == 0 && signal[divide*5-1] == 0 {
-					a.setMessage(fmt.Sprintf("主机为 %s 通道 %d 的dts信号异常!", a.Config.Host, notify.GetChannelID()), logrus.ErrorLevel)
-					return
+					a.ZonesChannelSignal.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), notify.ChannelID), notify)
+					signal := ChannelSignal{
+						DeviceId:   notify.GetDeviceID(),
+						ChannelId:  notify.GetChannelID(),
+						RealLength: notify.GetRealLength(),
+						Host:       a.Config.Host,
+						Signal:     notify.GetSignal(),
+						CreatedAt:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+					}
+					select {
+					case a.ChanChannelSignal <- signal:
+					default:
+					}
+				})
+				if err != nil {
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
+					break START
+				}
+			case CallEvent:
+				a.ChanChannelEvent = make(chan ChannelEvent, 10)
+				err = a.Client.CallDeviceEventNotify(func(notify *model.DeviceEventNotify, err error) {
+					event := ChannelEvent{
+						DeviceId:      notify.GetDeviceID(),
+						ChannelId:     notify.GetChannelID(),
+						Host:          a.Config.Host,
+						EventType:     notify.GetEventType(),
+						ChannelLength: notify.GetChannelLength(),
+						CreatedAt:     &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
+					}
+					select {
+					case a.ChanChannelEvent <- event:
+					default:
+					}
+				})
+				if err != nil {
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
+					break START
 				}
 			}
-
-			a.ZonesChannelSignal.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), notify.ChannelID), notify)
-			signal := ChannelSignal{
-				DeviceId:   notify.GetDeviceID(),
-				ChannelId:  notify.GetChannelID(),
-				RealLength: notify.GetRealLength(),
-				Host:       a.Config.Host,
-				Signal:     notify.GetSignal(),
-				CreatedAt:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
-			}
-			select {
-			case a.ChanChannelSignal <- signal:
-			default:
-			}
-		})
-		if err != nil {
-			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
-			time.Sleep(time.Second * 3)
-			continue
-		}
-
-		err = a.Client.CallZoneAlarmNotify(func(notify *model.ZoneAlarmNotify, err error) {
-			a.setMessage(fmt.Sprintf("主机为 %s 的dts 产生了一个警报...", a.Config.Host), logrus.WarnLevel)
-			zones := make([]*model.DefenceZone, 0)
-			for _, zone := range notify.GetZones() {
-				value, ok := a.ZonesTemp.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), Id(a.Config.DeviceId, uint(zone.ID))), notify.GetTimestamp())
-				if ok && time.Now().Sub(time.Unix(value.(int64)/1000, 0)) < time.Second*time.Duration(a.Config.ZonesAlarmInterval) {
-					return
-				}
-				a.ZonesTemp.Store(fmt.Sprintf("%s-%d", notify.GetDeviceID(), Id(a.Config.DeviceId, uint(zone.ID))), notify.GetTimestamp())
-				zones = append(zones, zone)
-			}
-			length := len(zones)
-			if length == 0 {
-				a.setMessage(fmt.Sprintf("主机为 %s 的dts更新防区温度数量为空!", a.Config.Host), logrus.ErrorLevel)
-				return
-			}
-			if length > 10 {
-				divide := length / 5
-				if zones[0].AverageTemperature == 0 && zones[divide*1].AverageTemperature == 0 &&
-					zones[divide*2].AverageTemperature == 0 && zones[divide*3].AverageTemperature == 0 &&
-					zones[divide*4].AverageTemperature == 0 && zones[divide*5-1].AverageTemperature == 0 {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts更新防区温度异常!", a.Config.Host), logrus.ErrorLevel)
-					return
-				}
-			}
-			alarms := make(Zones, len(zones))
-			for k, v := range zones {
-				id := Id(a.Config.DeviceId, uint(v.GetID()))
-				zone := a.GetZone(id)
-				if zone == nil {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts %d 防区未找到", a.Config.Host, id), logrus.ErrorLevel)
-					continue
-				}
-				alarms[k] = zone
-				alarms[k].Temperature = &Temperature{
-					Max: v.GetMaxTemperature(),
-					Avg: v.GetAverageTemperature(),
-					Min: v.GetMinTemperature(),
-					At:  &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
-				}
-				alarms[k].Alarm = &Alarm{
-					At:       &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
-					Location: v.GetAlarmLoc(),
-					State:    v.GetAlarmType(),
-				}
-			}
-			select {
-			case a.ChanZonesAlarm <- ZonesAlarm{
-				Zones:     alarms,
-				DeviceId:  notify.GetDeviceID(),
-				Host:      a.Config.Host,
-				CreatedAt: &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
-			}:
-			default:
-			}
-		})
-		if err != nil {
-			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受报警回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
-			time.Sleep(time.Second * 3)
-			continue
-		}
-
-		err = a.Client.CallDeviceEventNotify(func(notify *model.DeviceEventNotify, err error) {
-			event := ChannelEvent{
-				DeviceId:      notify.GetDeviceID(),
-				ChannelId:     notify.GetChannelID(),
-				Host:          a.Config.Host,
-				EventType:     notify.GetEventType(),
-				ChannelLength: notify.GetChannelLength(),
-				CreatedAt:     &TimeLocal{time.Unix(notify.GetTimestamp()/1000, 0)},
-			}
-			select {
-			case a.ChanChannelEvent <- event:
-			default:
-			}
-		})
-		if err != nil {
-			a.setMessage(fmt.Sprintf("主机为 %s 的dts接受信号回调失败: %s", a.Config.Host, err), logrus.ErrorLevel)
-			time.Sleep(time.Second * 3)
-			continue
 		}
 	}
 }
