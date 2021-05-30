@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/robfig/cron/v3"
 	"github.com/zing-dev/atian-tools/source/atian/dts"
 	"github.com/zing-dev/atian-tools/source/device"
@@ -14,7 +15,8 @@ import (
 
 const (
 	_              Type = iota
-	Ping                //心跳
+	Ping                //心跳 发
+	Pong                //心跳 收
 	DTSAlarm            //报警
 	DTSFiber            //光线状态
 	DTSTemperature      //温度更新
@@ -31,6 +33,12 @@ type Request struct {
 	Zone  *dts.Zone          `json:"zone,omitempty"`  // 单个报警的防区信息
 	Sign  *dts.ChannelSignal `json:"sign,omitempty"`  //单个通道的信号数据
 	Fiber *dts.ChannelEvent  `json:"fiber,omitempty"` //单个通道的光纤状态
+}
+
+type Response struct {
+	Code byte        `json:"code,omitempty"`
+	Msg  string      `json:"msg,omitempty"`
+	Data interface{} `json:"data,omitempty"`
 }
 
 func (r Request) JSON() []byte {
@@ -51,8 +59,10 @@ type Api struct {
 }
 
 func (a *Api) GetId() string {
-	return "api-" + a.URL
+	t := device.TypeApi
+	return fmt.Sprintf("%s-%s", t.String(), a.URL)
 }
+
 func (a *Api) GetType() device.Type {
 	return device.TypeApi
 }
@@ -110,7 +120,7 @@ func (a *Api) Post(request Request) ([]byte, error) {
 
 func (a *Api) Run() {
 	a.Client = http.Client{Timeout: time.Second * 3}
-	id, err := a.cron.AddFunc("* */1 * * * *", a.ping)
+	id, err := a.cron.AddFunc("0 */1 * * * *", a.ping)
 	if err != nil {
 		return
 	}
