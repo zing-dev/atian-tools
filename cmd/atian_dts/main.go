@@ -10,11 +10,14 @@ import (
 
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
-	app := dts.New(ctx, dts.Config{
+	app := dts.New(ctx, dts.DTS{
+		Id:   1,
+		Name: "192.168.0.215",
+		Host: "192.168.0.215",
+	}, dts.Config{
 		EnableWarehouse: false,
 		EnableRelay:     false,
 		ChannelNum:      4,
-		Host:            "192.168.0.215",
 	})
 	app.CallTypes = []dts.CallType{dts.CallAlarm, dts.CallTemp, dts.CallEvent}
 	app.Run()

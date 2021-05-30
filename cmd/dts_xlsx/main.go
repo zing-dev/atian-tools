@@ -12,13 +12,7 @@ import (
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour*2)
 	host := "192.168.0.215"
-	app := dts.New(ctx, dts.Config{
-		EnableWarehouse:   false,
-		EnableRelay:       false,
-		ChannelNum:        4,
-		Host:              host,
-		ZonesTempInterval: 6,
-	})
+	app := dts.New(ctx, dts.DTS{Id: 1, Host: host}, dts.Config{ChannelNum: 4, ZonesTempInterval: 6})
 	time.AfterFunc(time.Hour, cancel)
 	app.Run()
 	store := xlsx.New(ctx, xlsx.Config{

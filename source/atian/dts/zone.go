@@ -232,9 +232,18 @@ type (
 		Relay     Relay   `json:"relays,omitempty"`     //防区继电器
 	}
 
+	// DTS 当前dts主机的信息
+	DTS struct {
+		Id       uint   `json:"id"`
+		Name     string `json:"name"`
+		Host     string `json:"host"`
+		OfficeId string `json:"office_id"`
+	}
+
 	// Zone 防区信息
 	Zone struct {
 		BaseZone
+		DTS         *DTS         `json:"dts,omitempty"`         //当前防区所属的设备信息
 		Coordinate  *Coordinate  `json:"coordinate,omitempty"`  //防区坐标
 		Temperature *Temperature `json:"temperature,omitempty"` //防区温度详情
 		Alarm       *Alarm       `json:"alarm,omitempty"`       //报警防区信息
@@ -265,13 +274,15 @@ type (
 
 	// ChannelZones  主机下的防区集合
 	ChannelZones struct {
+		DTS       DTS    `json:"dts,omitempty"`
 		ChannelId int32  `json:"channel_id,omitempty"`
 		Host      string `json:"host,omitempty"`
-		Zones     Zones
+		Zones     Zones  `json:"zones"`
 	}
 
 	// ZonesTemp DTS所有防区温度
 	ZonesTemp struct {
+		DTS       DTS        `json:"dts,omitempty"`
 		DeviceId  string     `json:"device_id"`
 		Host      string     `json:"host,omitempty"`
 		CreatedAt *TimeLocal `json:"created_at"`
@@ -280,24 +291,27 @@ type (
 
 	// ZonesAlarm 报警防区信息集合
 	ZonesAlarm struct {
-		Zones     Zones      `json:"zones"`
+		DTS       DTS        `json:"dts,omitempty"`
 		DeviceId  string     `json:"device_id"`
 		Host      string     `json:"host,omitempty"`
 		CreatedAt *TimeLocal `json:"created_at"`
+		Zones     Zones      `json:"zones"`
 	}
 
 	// ChannelSignal DTS某一通道温度信号
 	ChannelSignal struct {
+		DTS        DTS        `json:"dts,omitempty"`
 		DeviceId   string     `json:"device_id"`
-		ChannelId  int32      `json:"channel_id"`
-		RealLength float32    `json:"real_length"`
 		Host       string     `json:"host,omitempty"`
-		Signal     []float32  `json:"signal"`
+		ChannelId  int32      `json:"channel_id"`
 		CreatedAt  *TimeLocal `json:"created_at"`
+		RealLength float32    `json:"real_length"`
+		Signal     []float32  `json:"signal"`
 	}
 
 	// ChannelEvent  DTS某一通道事件
 	ChannelEvent struct {
+		DTS           DTS              `json:"dts,omitempty"`
 		Host          string           `json:"host,omitempty"`
 		ChannelId     int32            `json:"channel_id"`
 		DeviceId      string           `json:"device_id"`

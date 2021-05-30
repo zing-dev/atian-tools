@@ -18,12 +18,13 @@ type Core struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	apps    map[string]*dts.App
-	configs []dts.Config
+	apps   map[string]*dts.App
+	DTS    []dts.DTS
+	config dts.Config
 
 	locker sync.Mutex
 
-	WarehouseZones map[string]map[string]dts.Zones
+	CoordinateZones map[string]map[string]dts.Zones
 }
 
 func main() {
@@ -32,21 +33,23 @@ func main() {
 		ctx:    ctx,
 		cancel: cancel,
 		apps:   map[string]*dts.App{},
-		configs: []dts.Config{
-			{DeviceId: 1, ChannelNum: 4, Host: "192.168.0.86"},
-			{DeviceId: 2, EnableRelay: true, EnableWarehouse: true, ChannelNum: 4, Host: "192.168.0.215"},
+		DTS: []dts.DTS{
+			{Id: 0, Name: "", Host: "192.168.0.86"},
+			{Id: 0, Name: "", Host: "192.168.0.215"},
 		},
-		WarehouseZones: map[string]map[string]dts.Zones{},
+		config:          dts.Config{ChannelNum: 4},
+		CoordinateZones: map[string]map[string]dts.Zones{},
 	}
-	for _, config := range core.configs {
-		go func(config dts.Config) {
-			app := dts.New(core.ctx, config)
+	for _, d := range core.DTS {
+		d := d
+		go func(d dts.DTS) {
+			app := dts.New(core.ctx, d, core.config)
 			app.Cron = cron.New(cron.WithSeconds())
 			core.locker.Lock()
-			core.apps[config.Host] = app
+			core.apps[d.Host] = app
 			core.locker.Unlock()
 			id, err := app.Cron.AddFunc("*/10 * * * * *", func() {
-				log.Println("cron ", app.Config.Host)
+				log.Println("cron ", d.Host)
 			})
 			if err != nil {
 				return
@@ -69,13 +72,14 @@ func main() {
 							if zone.Coordinate.Warehouse == "" || zone.Coordinate.Group == "" {
 								continue
 							}
-							if len(core.WarehouseZones[zone.Coordinate.Warehouse]) == 0 {
-								core.WarehouseZones[zone.Coordinate.Warehouse] = map[string]dts.Zones{}
+							if len(core.CoordinateZones[zone.Coordinate.Warehouse]) == 0 {
+								core.CoordinateZones[zone.Coordinate.Warehouse] = map[string]dts.Zones{}
 							}
-							if len(core.WarehouseZones[zone.Coordinate.Warehouse][zone.Coordinate.Group]) == 0 {
-								core.WarehouseZones[zone.Coordinate.Warehouse][zone.Coordinate.Group] = dts.Zones{}
+							if len(core.CoordinateZones[zone.Coordinate.Warehouse][zone.Coordinate.Group]) == 0 {
+								core.CoordinateZones[zone.Coordinate.Warehouse][zone.Coordinate.Group] = dts.Zones{}
 							}
-							core.WarehouseZones[zone.Coordinate.Warehouse][zone.Coordinate.Group] = append(core.WarehouseZones[zone.Coordinate.Warehouse][zone.Coordinate.Group], zone)
+							core.CoordinateZones[zone.Coordinate.Warehouse][zone.Coordinate.Group] =
+								append(core.CoordinateZones[zone.Coordinate.Warehouse][zone.Coordinate.Group], zone)
 						}
 						core.locker.Unlock()
 						log.Println("配置新能源防区结构层级结束...")
@@ -92,12 +96,12 @@ func main() {
 					log.Println("alarm over", alarm.Host, dts.GetAlarmTypeString(alarm.Zones[0].Alarm.State))
 				}
 			}
-		}(config)
+		}(d)
 	}
 
 	time.AfterFunc(time.Minute, func() {
 		core.locker.Lock()
-		core.apps[core.configs[1].Host].Close()
+		core.apps[core.DTS[1].Host].Close()
 		core.locker.Unlock()
 	})
 

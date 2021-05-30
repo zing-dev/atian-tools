@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	_           Type = iota
-	Ping             //心跳
-	Alarm            //报警
-	Fault            //故障
-	Temperature      //温度更新
-	ChannelSign      //通道信号
+	_              Type = iota
+	Ping                //心跳
+	DTSAlarm            //报警
+	DTSFiber            //光线状态
+	DTSTemperature      //温度更新
+	DTSChannelSign      //通道信号
 
 	ContentTypeJson = "application/json;charset=UTF-8"
 )
@@ -28,9 +28,9 @@ type Type byte
 type Request struct {
 	Type  Type               `json:"type"`
 	Host  string             `json:"host"`
-	Zone  *dts.Zone          `json:"zone,omitempty"`
-	Sign  *dts.ChannelSignal `json:"sign,omitempty"`
-	Fault *dts.ChannelEvent  `json:"fault,omitempty"`
+	Zone  *dts.Zone          `json:"zone,omitempty"`  // 单个报警的防区信息
+	Sign  *dts.ChannelSignal `json:"sign,omitempty"`  //单个通道的信号数据
+	Fiber *dts.ChannelEvent  `json:"fiber,omitempty"` //单个通道的光纤状态
 }
 
 func (r Request) JSON() []byte {
