@@ -35,7 +35,7 @@ type Request struct {
 }
 
 type Response struct {
-	Code byte        `json:"code,omitempty"`
+	Code Type        `json:"code,omitempty"`
 	Msg  string      `json:"msg,omitempty"`
 	Data interface{} `json:"data,omitempty"`
 }
@@ -125,7 +125,16 @@ func (a *Api) Post(request Request) ([]byte, error) {
 			return
 		}
 	}()
-	return io.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	response := new(Response)
+	err = json.Unmarshal(data, response)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 func (a *Api) Run() {
