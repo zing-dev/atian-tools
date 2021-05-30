@@ -1,23 +1,36 @@
-# ATian Tools
+# ATian Tools 亚天软件开发工具库
 
-## Protocol
+## Protocol 自定义协议
 
-### HTTP
+### HTTP HTTP协议
 
-#### NanDu
+#### NanDu 
 
 ### Soap
 
 ### Q5
 
-## Data Source
+## Data Source 数据源
 
-### ATian
+### ATian 亚天设备
 
-#### DTS
+#### DTS 分布式光纤测温
 
-### BeiDa Bluebird
+### BeiDa Bluebird 北大青鸟消防设备
 
-#### JBF193K
+- 控制器号
+- 回路号   
+- 部位号 
+- 部件类型
 
-#### JBF293K
+#### 旧版文档JBF193K
+
+#### 新版文档JBF293K
+
+#### 报警命令
+
+- `128 即 (0x80)`
+
+#### 部件类型
+
+- 烟感 `21`

@@ -122,7 +122,7 @@ func main() {
 					if protocol.IsCmdFailure() {
 						response, err := app.service.DeviceWarn(&q5.DeviceWarn{
 							LocCode:     item.Code,
-							WarnContext: item.String(),
+							WarnContext: item.Code,
 						})
 						if err != nil {
 							log.L.Error("故障报警失败: ", err)
@@ -140,8 +140,8 @@ func main() {
 
 					if protocol.IsCmdAlarm() {
 						response, err := app.service.FireWarn(&q5.FireWarn{
-							LocCode:     m.Code,
-							WarnContext: item.String(),
+							LocCode:     item.Code,
+							WarnContext: item.Code,
 						})
 						if err != nil {
 							log.L.Error("烟感报警失败: ", err)

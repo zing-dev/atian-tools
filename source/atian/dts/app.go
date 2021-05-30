@@ -15,20 +15,24 @@ import (
 )
 
 const (
-	CallAlarm CallType = iota
-	CallTemp
-	CallSignal
-	CallEvent
+	CallAlarm  CallType = iota //接收报警回调
+	CallTemp                   //接收温度更新回调
+	CallSignal                 //接受光纤通道信号回调
+	CallEvent                  //接受光纤事件回调
 )
 
-type CallType byte
+type CallType byte //回调类型
 
 type Config struct {
-	DeviceId        uint
-	EnableWarehouse bool
-	EnableRelay     bool
-	ChannelNum      byte
-	Host            string
+	DeviceId uint //设备 DeviceId
+	//Deprecated
+	EnableWarehouse bool //废弃 是否启用防区坐标标签
+	Coordinate      bool //是否启用防区坐标标签
+	//Deprecated
+	EnableRelay bool //废弃 是否启用防区继电器标签
+	Relay       bool //是否启用防区继电器标签
+	ChannelNum  byte
+	Host        string
 
 	//ZonesAlarmInterval 防区温度间隔秒
 	ZonesAlarmInterval byte
@@ -320,9 +324,31 @@ func (a *App) SetCron(cron *cron.Cron) {
 	a.Cron = cron
 }
 
+// Close 关闭继电器
 func (a *App) Close() {
 	for _, id := range a.CronIds {
 		a.Cron.Remove(id)
+	}
+	if a.ChanStatus != nil {
+		close(a.ChanStatus)
+	}
+	if a.ChanMessage != nil {
+		close(a.ChanMessage)
+	}
+	if a.ChanZonesTemp != nil {
+		close(a.ChanZonesTemp)
+	}
+	if a.ChanChannelEvent != nil {
+		close(a.ChanChannelEvent)
+	}
+	if a.ChanChannelSignal != nil {
+		close(a.ChanChannelSignal)
+	}
+	if a.ChanZonesAlarm != nil {
+		close(a.ChanZonesAlarm)
+	}
+	if a.GetStatus() == device.Connected {
+		a.Client.Close()
 	}
 	a.cancel()
 }
@@ -386,19 +412,19 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 			Finish:    v.GetFinish(),
 			Host:      a.Config.Host,
 		}
-		if v.Tag == "" && (a.Config.EnableRelay || a.Config.EnableWarehouse) {
+		if v.Tag == "" && (a.Config.EnableRelay || a.Config.Coordinate || a.Config.EnableWarehouse || a.Config.Relay) {
 			log.L.Warn(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 标签为空", a.Config.Host, channelId, v.ZoneName))
 			continue
 		}
 		zones[k].Tag = DecodeTags(v.GetTag())
-		if a.Config.EnableRelay {
+		if a.Config.EnableRelay || a.Config.Relay {
 			relay, err := NewRelay(zones[k].Tag)
 			if err != nil {
 				continue
 			}
 			zones[k].Relay = relay
 		}
-		if a.Config.EnableWarehouse {
+		if a.Config.EnableWarehouse || a.Config.Coordinate {
 			coordinate, err := NewCoordinate(zones[k].Tag)
 			if err != nil {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 坐标失败: %s", a.Config.Host, channelId, v.ZoneName, err))

@@ -194,6 +194,7 @@ const (
 type (
 	Status byte
 
+	// TimeLocal 本地时间常量
 	TimeLocal struct {
 		time.Time
 	}
@@ -206,45 +207,46 @@ type (
 
 	// Temperature 温度信息
 	Temperature struct {
-		Max float32    `json:"max"`
-		Avg float32    `json:"avg"`
-		Min float32    `json:"min"`
-		At  *TimeLocal `json:"at,omitempty"`
+		Max float32    `json:"max"`          //最大温度
+		Avg float32    `json:"avg"`          //平均温度
+		Min float32    `json:"min"`          //最小温度
+		At  *TimeLocal `json:"at,omitempty"` //产生温度的时间
 	}
 
 	// Alarm 报警防区信息
 	Alarm struct {
-		Location float32                `json:"location"`
-		At       *TimeLocal             `json:"at"`
-		State    model.DefenceAreaState `json:"state"`
+		Location float32                `json:"location"` //防区报警位置
+		At       *TimeLocal             `json:"at"`       //报警时间
+		State    model.DefenceAreaState `json:"state"`    //报警类型
 	}
 
+	// BaseZone 基本的防区信息
 	BaseZone struct {
-		Id        uint    `json:"id,omitempty"`
-		Name      string  `json:"name,omitempty"`
-		ChannelId byte    `json:"channel_id,omitempty"`
-		Host      string  `json:"host,omitempty"`
-		Start     float32 `json:"start,omitempty"`
-		Finish    float32 `json:"finish,omitempty"`
-		Tag       Tag     `json:"tag,omitempty"`
-		Relay     Relay   `json:"relays,omitempty"`
+		Id        uint    `json:"id,omitempty"`         //防区Id,即设备 Id 和当前防区 Id 的绑定
+		Name      string  `json:"name,omitempty"`       //防区名
+		ChannelId byte    `json:"channel_id,omitempty"` //防区通道
+		Host      string  `json:"host,omitempty"`       //防区所属主机
+		Start     float32 `json:"start,omitempty"`      //防区开始位置
+		Finish    float32 `json:"finish,omitempty"`     //防区结束位置
+		Tag       Tag     `json:"tag,omitempty"`        //防区标签
+		Relay     Relay   `json:"relays,omitempty"`     //防区继电器
 	}
 
 	// Zone 防区信息
 	Zone struct {
 		BaseZone
-		Coordinate  *Coordinate  `json:"coordinate,omitempty"`
+		Coordinate  *Coordinate  `json:"coordinate,omitempty"`  //防区坐标
 		Temperature *Temperature `json:"temperature,omitempty"` //防区温度详情
 		Alarm       *Alarm       `json:"alarm,omitempty"`       //报警防区信息
 	}
 
-	// Coordinate 防区空间左边位置
+	// Coordinate 防区空间坐标位置
 	Coordinate struct {
-		Warehouse string `json:"warehouse,omitempty"`
-		Group     string `json:"group,omitempty"`
-		Row       uint16 `json:"row,omitempty"`
-		Column    uint16 `json:"column,omitempty"`
-		Layer     uint16 `json:"layer,omitempty"`
+		Warehouse string `json:"warehouse,omitempty"` //仓库
+		Group     string `json:"group,omitempty"`     //组
+		Row       uint16 `json:"row,omitempty"`       //行
+		Column    uint16 `json:"column,omitempty"`    //列
+		Layer     uint16 `json:"layer,omitempty"`     //层
 	}
 
 	// Zones 防区集合
@@ -425,6 +427,7 @@ type D3 struct {
 	value uint16
 }
 
+// NewRelay 解析继电器标签
 func NewRelay(tag map[string]string) (Relay, error) {
 	for _, t := range strings.Split(TagRelay, "|") {
 		if r, ok := tag[t]; !ok {
@@ -440,6 +443,7 @@ func NewRelay(tag map[string]string) (Relay, error) {
 	return nil, errors.New("继电器标签不存在")
 }
 
+// NewCoordinate 解析防区空间坐标
 func NewCoordinate(tag map[string]string) (*Coordinate, error) {
 	var (
 		w, g = "", ""
