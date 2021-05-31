@@ -111,7 +111,7 @@ func (a *Api) ping() {
 	a.setStatus(device.Connected)
 }
 
-func (a *Api) Post(request Request) ([]byte, error) {
+func (a *Api) Post(request Request) (*Response, error) {
 	resp, err := a.Client.Post(a.URL, ContentTypeJson, bytes.NewBuffer(request.JSON()))
 	if err != nil {
 		return nil, err
