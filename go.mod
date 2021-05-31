@@ -5,6 +5,7 @@ go 1.16
 require (
 	github.com/360EntSecGroup-Skylar/excelize v1.4.1
 	github.com/Atian-OE/DTSSDK_Golang v0.1.6
+	github.com/aliyun/alibaba-cloud-sdk-go v1.61.1117
 	github.com/eclipse/paho.mqtt.golang v1.3.4
 	github.com/gin-gonic/gin v1.7.2
 	github.com/gorilla/websocket v1.4.2

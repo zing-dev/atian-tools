@@ -45,7 +45,7 @@ type Config struct {
 
 func (o *Config) GetName() string {
 	start := time.Now()
-	duration := time.Duration(o.MinSaveHour) * time.Minute
+	duration := time.Duration(o.MinSaveHour) * time.Hour
 	end := start.Add(duration)
 	if duration == 0 {
 		o.name = start.Format("2006-01-02")

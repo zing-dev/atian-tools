@@ -29,7 +29,7 @@ type Type byte
 
 type Request struct {
 	Type  Type               `json:"type"`
-	Zone  *dts.Zone          `json:"zone,omitempty"`  // 单个报警的防区信息
+	Zone  *dts.Zone          `json:"zone,omitempty"`  //单个报警的防区信息
 	Sign  *dts.ChannelSignal `json:"sign,omitempty"`  //单个通道的信号数据
 	Fiber *dts.ChannelEvent  `json:"fiber,omitempty"` //单个通道的光纤状态
 }
@@ -45,6 +45,11 @@ func (r Request) JSON() []byte {
 	return data
 }
 
+var (
+	once = sync.Once{}
+	api  *Api
+)
+
 type Api struct {
 	URL string
 
@@ -54,6 +59,17 @@ type Api struct {
 
 	locker sync.Mutex
 	status device.StatusType
+}
+
+func New(url string) *Api {
+	once.Do(func() {
+		api = &Api{
+			URL:    url,
+			Client: http.Client{Timeout: 3 * time.Second},
+			locker: sync.Mutex{},
+		}
+	})
+	return api
 }
 
 func (a *Api) GetId() string {
