@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	_              Type = iota
+	Error          Type = iota
 	Ping                //心跳 发
 	Pong                //心跳 收
 	DTSAlarm            //报警
@@ -29,7 +29,6 @@ type Type byte
 
 type Request struct {
 	Type  Type               `json:"type"`
-	Host  string             `json:"host"`
 	Zone  *dts.Zone          `json:"zone,omitempty"`  // 单个报警的防区信息
 	Sign  *dts.ChannelSignal `json:"sign,omitempty"`  //单个通道的信号数据
 	Fiber *dts.ChannelEvent  `json:"fiber,omitempty"` //单个通道的光纤状态
@@ -47,8 +46,7 @@ func (r Request) JSON() []byte {
 }
 
 type Api struct {
-	Host string
-	URL  string
+	URL string
 
 	Client http.Client
 	cron   *cron.Cron
@@ -85,10 +83,7 @@ func (a *Api) GetStatus() device.StatusType {
 
 func (a *Api) ping() {
 	a.setStatus(device.Connecting)
-	resp, err := a.Client.Post(a.URL, ContentTypeJson, bytes.NewBuffer(Request{
-		Type: Ping,
-		Host: a.Host,
-	}.JSON()))
+	resp, err := a.Client.Post(a.URL, ContentTypeJson, bytes.NewBuffer(Request{Type: Ping}.JSON()))
 	if err != nil {
 		a.setStatus(device.Disconnect)
 		return
@@ -101,7 +96,6 @@ func (a *Api) ping() {
 }
 
 func (a *Api) Post(request Request) ([]byte, error) {
-	request.Host = a.Host
 	resp, err := a.Client.Post(a.URL, ContentTypeJson, bytes.NewBuffer(request.JSON()))
 	if err != nil {
 		return nil, err
