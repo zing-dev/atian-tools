@@ -208,6 +208,8 @@ START:
 					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受报警回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
 					time.Sleep(time.Second * 3)
 					break START
+				} else {
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受报警回调", a.DTS.Host), logrus.InfoLevel)
 				}
 			case CallTemp:
 				a.ChanZonesTemp = make(chan ZonesTemp, 30)
@@ -407,6 +409,9 @@ func (a *App) setStatus(s device.StatusType) {
 
 func (a *App) setMessage(msg string, level logrus.Level) {
 	log.L.Log(level, msg)
+	if a.ChanMessage == nil {
+		return
+	}
 	select {
 	case a.ChanMessage <- device.Message{
 		Msg:   msg,
