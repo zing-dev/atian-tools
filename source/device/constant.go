@@ -68,8 +68,8 @@ func (s *StatusType) String() string {
 func GetConnectMap() []Constant {
 	a1, a2, a3 := Connecting, Connected, Disconnect
 	return []Constant{
-		{Name: a1.String(), Value: byte(Connecting), Color: ColorPrimary},
-		{Name: a2.String(), Value: byte(Connected), Color: ColorDanger},
+		{Name: a1.String(), Value: byte(Connecting), Color: ColorDanger},
+		{Name: a2.String(), Value: byte(Connected), Color: ColorPrimary},
 		{Name: a3.String(), Value: byte(Disconnect), Color: ColorDanger},
 	}
 }

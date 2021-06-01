@@ -90,12 +90,32 @@ func (m *Manger) Add(device Device) {
 	})
 }
 
+func (m *Manger) Run(id string) {
+	value, ok := m.devices.Load(id)
+	if ok {
+		m.emit(EventListener{
+			Device:    value.(Device),
+			EventType: EventRun,
+		})
+	}
+}
+
 func (m *Manger) Update(device Device) {
 	m.devices.Store(device.GetId(), device)
 	m.emit(EventListener{
 		Device:    device,
 		EventType: EventUpdate,
 	})
+}
+
+func (m *Manger) Close(id string) {
+	value, ok := m.devices.Load(id)
+	if ok {
+		m.emit(EventListener{
+			Device:    value.(Device),
+			EventType: EventClose,
+		})
+	}
 }
 
 func (m *Manger) Delete(device Device) {

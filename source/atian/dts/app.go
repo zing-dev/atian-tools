@@ -25,15 +25,9 @@ type CallType byte //回调类型
 
 type Config struct {
 	//DeviceId uint //设备 DeviceId
-	//Deprecated
-	EnableWarehouse bool //废弃 是否启用防区坐标标签
-	Coordinate      bool //是否启用防区坐标标签
-	//Deprecated
-	EnableRelay bool //废弃 是否启用防区继电器标签
-	Relay       bool //是否启用防区继电器标签
-	ChannelNum  byte
-	//Host        string
-
+	Coordinate bool //是否启用防区坐标标签
+	Relay      bool //是否启用防区继电器标签
+	ChannelNum byte
 	//ZonesAlarmInterval 防区温度间隔秒
 	ZonesAlarmInterval byte
 	//ZonesTempInterval 报警温度间隔秒
@@ -83,19 +77,15 @@ func New(ctx context.Context, dts DTS, config Config) *App {
 
 	ctx, cancel := context.WithCancel(ctx)
 	return &App{
-		Context:           ctx,
-		cancel:            cancel,
-		Config:            config,
-		DTS:               dts,
-		ChanMessage:       make(chan device.Message, 0),
-		ChanStatus:        make(chan device.StatusType, 0),
-		ChanZonesTemp:     make(chan ZonesTemp, 30),
-		ChanChannelSignal: make(chan ChannelSignal, 10),
-		ChanChannelEvent:  make(chan ChannelEvent, 10),
-		ChanZonesAlarm:    make(chan ZonesAlarm, 30),
-		Zones:             map[uint]*Zone{},
-		CronIds:           map[byte]cron.EntryID{},
-		locker:            sync.Mutex{},
+		Context:     ctx,
+		cancel:      cancel,
+		Config:      config,
+		DTS:         dts,
+		ChanMessage: make(chan device.Message, 0),
+		ChanStatus:  make(chan device.StatusType, 0),
+		Zones:       map[uint]*Zone{},
+		CronIds:     map[byte]cron.EntryID{},
+		locker:      sync.Mutex{},
 	}
 }
 
@@ -132,6 +122,8 @@ func (a *App) Run() {
 	a.Client.CallDisconnected(func(s string) {
 		a.setMessage(fmt.Sprintf("主机为 %s 的dts断开连接", s), logrus.WarnLevel)
 		a.setStatus(device.Disconnect)
+		time.Sleep(time.Millisecond)
+		a.close()
 	})
 }
 
@@ -328,34 +320,50 @@ func (a *App) SetCron(cron *cron.Cron) {
 	a.Cron = cron
 }
 
+func (a *App) close() {
+	select {
+	case <-a.ChanStatus:
+	default:
+		close(a.ChanStatus)
+	}
+	select {
+	case <-a.ChanMessage:
+	default:
+		close(a.ChanMessage)
+	}
+	select {
+	case <-a.ChanZonesTemp:
+	default:
+		close(a.ChanZonesTemp)
+	}
+	select {
+	case <-a.ChanChannelEvent:
+	default:
+		close(a.ChanChannelEvent)
+	}
+	select {
+	case <-a.ChanChannelSignal:
+	default:
+		close(a.ChanChannelSignal)
+	}
+	select {
+	case <-a.ChanZonesAlarm:
+	default:
+		close(a.ChanZonesAlarm)
+	}
+}
+
 // Close 关闭继电器
 func (a *App) Close() {
 	a.cancel()
-	if a.GetStatus() == device.Connected {
+	if a.GetStatus() != device.Disconnect {
 		a.Client.Close()
 	}
 	time.Sleep(time.Millisecond)
 	for _, id := range a.CronIds {
 		a.Cron.Remove(id)
 	}
-	if a.ChanStatus != nil {
-		close(a.ChanStatus)
-	}
-	if a.ChanMessage != nil {
-		close(a.ChanMessage)
-	}
-	if a.ChanZonesTemp != nil {
-		close(a.ChanZonesTemp)
-	}
-	if a.ChanChannelEvent != nil {
-		close(a.ChanChannelEvent)
-	}
-	if a.ChanChannelSignal != nil {
-		close(a.ChanChannelSignal)
-	}
-	if a.ChanZonesAlarm != nil {
-		close(a.ChanZonesAlarm)
-	}
+	time.Sleep(time.Second)
 }
 
 func (a *App) Status() device.StatusType {
@@ -417,19 +425,19 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 			Finish:    v.GetFinish(),
 			Host:      a.DTS.Host,
 		}
-		if v.Tag == "" && (a.Config.EnableRelay || a.Config.Coordinate || a.Config.EnableWarehouse || a.Config.Relay) {
+		if v.Tag == "" && (a.Config.Coordinate || a.Config.Relay) {
 			log.L.Warn(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 标签为空", a.DTS.Host, channelId, v.ZoneName))
 			continue
 		}
 		zones[k].Tag = DecodeTags(v.GetTag())
-		if a.Config.EnableRelay || a.Config.Relay {
+		if a.Config.Relay {
 			relay, err := NewRelay(zones[k].Tag)
 			if err != nil {
 				continue
 			}
 			zones[k].Relay = relay
 		}
-		if a.Config.EnableWarehouse || a.Config.Coordinate {
+		if a.Config.Coordinate {
 			coordinate, err := NewCoordinate(zones[k].Tag)
 			if err != nil {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 坐标失败: %s", a.DTS.Host, channelId, v.ZoneName, err))
