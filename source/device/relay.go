@@ -103,21 +103,23 @@ func (r *Relay) ping() {
 	r.setStatus(Connected)
 }
 
-func (r *Relay) Run() {
-	r.status = Connecting
+func (r *Relay) Run() error {
+	r.status = UnConnect
 	r.Client = http.Client{
 		Timeout: time.Second * 3,
 	}
 	r.ping()
 	id, err := r.Cron.AddFunc("* */1 * * * *", r.ping)
 	if err != nil {
-		return
+		return err
 	}
 	r.CronId = id
+	return nil
 }
 
-func (r *Relay) Close() {
+func (r *Relay) Close() error {
 	r.locker.Lock()
 	defer r.locker.Unlock()
 	r.Cron.Remove(r.CronId)
+	return nil
 }

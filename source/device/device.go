@@ -14,9 +14,9 @@ type (
 		Status StatusType `json:"status"`
 	}
 
-	CallListener func(EventListener)
+	Listener func(Device)
 
-	EventListener struct {
+	Event struct {
 		Device    Device
 		EventType EventType
 	}
@@ -26,9 +26,9 @@ type (
 		GetType() Type
 
 		GetStatus() StatusType
-		Run()
+		Run() error
 
-		Close()
+		Close() error
 		SetCron(*cron.Cron)
 	}
 )
@@ -46,9 +46,10 @@ type Manger struct {
 	Cron    *cron.Cron
 
 	listeners sync.Map
-	event     chan EventListener
+	event     chan Event
 }
 
+// NewManger 实例化设备管理器
 func NewManger(ctx context.Context) *Manger {
 	once.Do(func() {
 		ctx, cancel := context.WithCancel(ctx)
@@ -59,7 +60,7 @@ func NewManger(ctx context.Context) *Manger {
 			locker:    sync.Mutex{},
 			Cron:      cron.New(cron.WithSeconds()),
 			listeners: sync.Map{},
-			event:     make(chan EventListener, 30),
+			event:     make(chan Event, 30),
 		}
 	})
 
@@ -67,67 +68,75 @@ func NewManger(ctx context.Context) *Manger {
 	return manger
 }
 
-func (m *Manger) RegisterEvent(eventType EventType, lister CallListener) {
+// Register 注册事件
+func (m *Manger) Register(eventType EventType, lister Listener) {
 	m.listeners.Store(eventType, lister)
 }
 
+// Adds 批量添加设备
 func (m *Manger) Adds(devices ...Device) {
 	for _, device := range devices {
 		m.devices.Store(device.GetId(), device)
 		device.SetCron(m.Cron) //定时任务
-		m.emit(EventListener{
+		m.emit(Event{
 			Device:    device,
 			EventType: EventAdd,
 		})
 	}
 }
 
+// Add 添加设备
 func (m *Manger) Add(device Device) {
 	m.devices.Store(device.GetId(), device)
-	m.emit(EventListener{
+	m.emit(Event{
 		Device:    device,
 		EventType: EventAdd,
 	})
 }
 
+// Run 运行设备
 func (m *Manger) Run(id string) {
 	value, ok := m.devices.Load(id)
 	if ok {
-		m.emit(EventListener{
+		m.emit(Event{
 			Device:    value.(Device),
 			EventType: EventRun,
 		})
 	}
 }
 
+// Update 更新设备
 func (m *Manger) Update(device Device) {
 	m.devices.Store(device.GetId(), device)
-	m.emit(EventListener{
+	m.emit(Event{
 		Device:    device,
 		EventType: EventUpdate,
 	})
 }
 
+// Close 关闭设备
 func (m *Manger) Close(id string) {
 	value, ok := m.devices.Load(id)
 	if ok {
-		m.emit(EventListener{
+		m.emit(Event{
 			Device:    value.(Device),
 			EventType: EventClose,
 		})
 	}
 }
 
+// Delete 根据 id 删除设备
 func (m *Manger) Delete(device Device) {
 	value, ok := m.devices.LoadAndDelete(device.GetId())
 	if ok {
-		m.emit(EventListener{
+		m.emit(Event{
 			Device:    value.(Device),
 			EventType: EventDelete,
 		})
 	}
 }
 
+// GetDevice 根据 id 获取设备
 func (m *Manger) GetDevice(id string) Device {
 	if value, ok := m.devices.Load(id); ok {
 		return value.(Device)
@@ -135,7 +144,16 @@ func (m *Manger) GetDevice(id string) Device {
 	return nil
 }
 
-func (m *Manger) Range() []Device {
+// Range 遍历设备
+func (m *Manger) Range(f func(string, Device)) {
+	m.devices.Range(func(key, value interface{}) bool {
+		f(key.(string), value.(Device))
+		return true
+	})
+}
+
+// Devices 数组形式获取设备
+func (m *Manger) Devices() []Device {
 	devices := make([]Device, m.Length())
 	i := 0
 	m.devices.Range(func(key, value interface{}) bool {
@@ -146,6 +164,7 @@ func (m *Manger) Range() []Device {
 	return devices
 }
 
+// GetStatus 获取设备的状态
 func (m *Manger) GetStatus() []Status {
 	status := make([]Status, m.Length())
 	i := 0
@@ -162,6 +181,7 @@ func (m *Manger) GetStatus() []Status {
 	return status
 }
 
+// Length 获取设备的数量
 func (m *Manger) Length() (length int) {
 	m.devices.Range(func(key, value interface{}) bool {
 		length++
@@ -170,7 +190,7 @@ func (m *Manger) Length() (length int) {
 	return
 }
 
-func (m *Manger) emit(event EventListener) {
+func (m *Manger) emit(event Event) {
 	select {
 	case m.event <- event:
 	default:
@@ -183,7 +203,7 @@ func (m *Manger) run() {
 		select {
 		case event := <-m.event:
 			if call, ok := manger.listeners.Load(event.EventType); ok {
-				go call.(CallListener)(event)
+				go call.(Listener)(event.Device)
 			}
 		case <-m.Context.Done():
 			return

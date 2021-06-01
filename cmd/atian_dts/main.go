@@ -15,9 +15,7 @@ func main() {
 		Name: "192.168.0.215",
 		Host: "192.168.0.215",
 	}, dts.Config{
-		EnableWarehouse: false,
-		EnableRelay:     false,
-		ChannelNum:      4,
+		ChannelNum: 4,
 	})
 	app.CallTypes = []dts.CallType{dts.CallAlarm, dts.CallTemp, dts.CallEvent}
 	app.Run()

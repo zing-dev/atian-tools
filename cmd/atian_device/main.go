@@ -2,11 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/robfig/cron/v3"
 	socket "github.com/zing-dev/atian-tools/protocol/websocket"
+	"github.com/zing-dev/atian-tools/source/atian/dts"
 	"github.com/zing-dev/atian-tools/source/device"
 	"log"
 	"net/http"
@@ -16,71 +15,85 @@ import (
 	"time"
 )
 
-type DTS struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	id     string
-}
-
-func (d *DTS) GetId() string {
-	return d.id
-}
-
-func (d *DTS) GetType() device.Type {
-	return device.TypeDTS
-}
-
-func (d *DTS) GetStatus() device.StatusType {
-	return device.Connecting
-}
-
-func (d *DTS) SetCron(cron *cron.Cron) {
-}
-
-func (d *DTS) Run() {
-	time.Sleep(time.Millisecond)
-	log.Println(d.GetId(), "run")
-	time.Sleep(time.Millisecond)
-}
-
-func (d *DTS) Close() {
-	log.Println(d.GetId(), "close")
-}
-
 func main() {
+	connections := make([]*websocket.Conn, 0)
 	manger := device.NewManger(context.Background())
-	manger.RegisterEvent(device.EventError, func(listener device.EventListener) {})
-	manger.RegisterEvent(device.EventAdd, func(listener device.EventListener) {
-		listener.Device.Run()
+	manger.Register(device.EventAdd, func(d device.Device) {
+		app := d.(*dts.App)
+		go func() {
+			for {
+				select {
+				case <-app.Context.Done():
+					socket.WriteToWebsocket(socket.TypeDevice, map[string]string{
+						"status": "over",
+					}, connections...)
+					socket.WriteToWebsocket(socket.TypeDevice, manger.GetStatus(), connections...)
+					return
+				case <-app.ChanStatus:
+					socket.WriteToWebsocket(socket.TypeDevice, manger.GetStatus(), connections...)
+				case temp := <-app.ChanZonesTemp:
+					log.Println("temp", temp.DTS.Host)
+				}
+			}
+		}()
 	})
-	manger.RegisterEvent(device.EventRun, func(listener device.EventListener) {})
-	manger.RegisterEvent(device.EventUpdate, func(listener device.EventListener) {})
-	manger.RegisterEvent(device.EventClose, func(listener device.EventListener) {})
-	manger.RegisterEvent(device.EventDelete, func(listener device.EventListener) {
-		listener.Device.Close()
+	manger.Register(device.EventRun, func(d device.Device) {
+		log.Println("run", d.GetId())
+		err := d.Run()
+		if err != nil {
+			log.Println(err)
+		}
+		socket.WriteToWebsocket(socket.TypeDevice, manger.GetStatus(), connections...)
+	})
+	manger.Register(device.EventClose, func(d device.Device) {
+		log.Println("close", d.GetId())
+		err := d.Close()
+		if err != nil {
+			log.Println(err)
+		}
+		socket.WriteToWebsocket(socket.TypeDevice, manger.GetStatus(), connections...)
 	})
 
-	ctx, cancel := context.WithCancel(manger.Context)
-	dd := make([]*DTS, 20)
-	for i := 0; i < 20; i++ {
-		dd[i] = &DTS{id: fmt.Sprintf("%d", i), ctx: ctx, cancel: cancel}
-		manger.Adds(dd[i])
+	devices := []device.Device{
+		dts.New(manger.Context, dts.DTS{Id: 1, Name: "1", Host: "192.168.0.215"}, dts.Config{ChannelNum: 4, ZonesTempInterval: 10}),
+		dts.New(manger.Context, dts.DTS{Id: 2, Name: "2", Host: "192.168.0.86"}, dts.Config{ChannelNum: 4, ZonesTempInterval: 10}),
 	}
+	manger.Adds(devices...)
+	manger.Range(func(s string, d device.Device) {
+		err := d.Run()
+		if err != nil {
+			log.Println(err)
+		}
+	})
+	go func() {
+		for {
+			select {
+			case <-time.After(time.Second * 10):
+				socket.WriteToWebsocket(socket.TypeDevice, manger.GetStatus(), connections...)
+			}
+		}
+	}()
 	w := gin.Default()
-	connections := make([]*websocket.Conn, 0)
-	w.GET("/", func(c *gin.Context) {
-		socket.WriteToWebsocket("", "", connections...)
+	w.GET("/run/:host", func(c *gin.Context) {
+		for _, d := range devices {
+			if d.GetId() == c.Param("host") {
+				manger.Adds(d)
+				manger.Run(d.GetId())
+			}
+		}
+		c.JSON(200, manger.GetStatus())
+	})
+	w.GET("/close/:host", func(c *gin.Context) {
+		manger.Close(c.Param("host"))
+		c.JSON(200, manger.GetStatus())
 	})
 	w.GET("/api", func(c *gin.Context) {
-		upgrader := websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
-		}
-		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		up := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+		conn, err := up.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
+		conn.WriteJSON(manger.GetStatus())
 		connections = append(connections, conn)
 	})
 	go w.Run(":1234")

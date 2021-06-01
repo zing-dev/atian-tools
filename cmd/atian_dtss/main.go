@@ -99,12 +99,6 @@ func main() {
 		}(d)
 	}
 
-	time.AfterFunc(time.Minute, func() {
-		core.locker.Lock()
-		core.apps[core.DTS[1].Host].Close()
-		core.locker.Unlock()
-	})
-
 	stop := make(chan os.Signal)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGABRT)
 	select {

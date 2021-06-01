@@ -34,6 +34,7 @@ const (
 )
 const (
 	_ StatusType = iota
+	UnConnect
 	Connecting
 	Connected
 	Disconnect
@@ -54,6 +55,8 @@ func (s *Type) String() string {
 
 func (s *StatusType) String() string {
 	switch *s {
+	case UnConnect:
+		return "未连接"
 	case Connecting:
 		return "连接中"
 	case Connected:
@@ -66,11 +69,12 @@ func (s *StatusType) String() string {
 }
 
 func GetConnectMap() []Constant {
-	a1, a2, a3 := Connecting, Connected, Disconnect
+	a1, a2, a3, a4 := UnConnect, Connecting, Connected, Disconnect
 	return []Constant{
-		{Name: a1.String(), Value: byte(Connecting), Color: ColorDanger},
-		{Name: a2.String(), Value: byte(Connected), Color: ColorPrimary},
-		{Name: a3.String(), Value: byte(Disconnect), Color: ColorDanger},
+		{Name: a1.String(), Value: byte(UnConnect), Color: ColorWarning},
+		{Name: a2.String(), Value: byte(Connecting), Color: ColorDanger},
+		{Name: a3.String(), Value: byte(Connected), Color: ColorPrimary},
+		{Name: a4.String(), Value: byte(Disconnect), Color: ColorDanger},
 	}
 }
 

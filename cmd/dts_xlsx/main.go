@@ -10,16 +10,16 @@ import (
 )
 
 func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Hour*2)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour*241)
 	host := "192.168.0.215"
 	app := dts.New(ctx, dts.DTS{Id: 1, Host: host}, dts.Config{ChannelNum: 4, ZonesTempInterval: 6})
-	time.AfterFunc(time.Hour, cancel)
+	time.AfterFunc(time.Hour*240, cancel)
 	app.Run()
 	store := xlsx.New(ctx, xlsx.Config{
 		Host:          host,
 		Dir:           "./xlsx",
 		MinTempMinute: 1,
-		MinSaveHour:   60,
+		MinSaveHour:   6,
 	})
 	for {
 		select {

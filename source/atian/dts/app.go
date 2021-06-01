@@ -81,6 +81,7 @@ func New(ctx context.Context, dts DTS, config Config) *App {
 		cancel:      cancel,
 		Config:      config,
 		DTS:         dts,
+		status:      device.UnConnect,
 		ChanMessage: make(chan device.Message, 0),
 		ChanStatus:  make(chan device.StatusType, 0),
 		Zones:       map[uint]*Zone{},
@@ -101,7 +102,10 @@ func (a *App) GetStatus() device.StatusType {
 	return a.Status()
 }
 
-func (a *App) Run() {
+func (a *App) Run() error {
+	if a.GetStatus() == device.Connecting || a.GetStatus() == device.Connected {
+		return errors.New(fmt.Sprintf("设备 %s 已经正在运行中", a.DTS.Host))
+	}
 	if len(a.CallTypes) == 0 {
 		a.CallTypes = []CallType{CallAlarm, CallTemp}
 	}
@@ -111,7 +115,10 @@ func (a *App) Run() {
 		a.SyncZones()
 		a.setStatus(device.Connected)
 		a.setMessage(fmt.Sprintf("主机为 %s 的dts连接成功", s), logrus.InfoLevel)
-		a.call()
+		err := a.call()
+		if err != nil {
+			a.setMessage(err.Error(), logrus.ErrorLevel)
+		}
 	})
 
 	a.Client.OnTimeout(func(s string) {
@@ -122,13 +129,12 @@ func (a *App) Run() {
 	a.Client.CallDisconnected(func(s string) {
 		a.setMessage(fmt.Sprintf("主机为 %s 的dts断开连接", s), logrus.WarnLevel)
 		a.setStatus(device.Disconnect)
-		time.Sleep(time.Millisecond)
-		a.close()
 	})
+	return nil
 }
 
-func (a *App) call() {
-	var err = errors.New("")
+func (a *App) call() (err error) {
+	err = errors.New("")
 	start := time.Now()
 START:
 	for err != nil {
@@ -314,13 +320,14 @@ START:
 			}
 		}
 	}
+	return
 }
 
 func (a *App) SetCron(cron *cron.Cron) {
 	a.Cron = cron
 }
 
-func (a *App) close() {
+func (a *App) Destroy() {
 	select {
 	case <-a.ChanStatus:
 	default:
@@ -354,16 +361,15 @@ func (a *App) close() {
 }
 
 // Close 关闭继电器
-func (a *App) Close() {
+func (a *App) Close() error {
 	a.cancel()
 	if a.GetStatus() != device.Disconnect {
 		a.Client.Close()
 	}
-	time.Sleep(time.Millisecond)
 	for _, id := range a.CronIds {
 		a.Cron.Remove(id)
 	}
-	time.Sleep(time.Second)
+	return nil
 }
 
 func (a *App) Status() device.StatusType {

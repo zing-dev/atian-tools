@@ -137,17 +137,19 @@ func (a *Api) Post(request Request) (*Response, error) {
 	return response, nil
 }
 
-func (a *Api) Run() {
+func (a *Api) Run() error {
 	a.Client = http.Client{Timeout: time.Second * 3}
 	id, err := a.cron.AddFunc("0 */1 * * * *", a.ping)
 	if err != nil {
-		return
+		return err
 	}
 	a.CronId = id
+	return nil
 }
 
-func (a *Api) Close() {
+func (a *Api) Close() error {
 	a.locker.Lock()
 	defer a.locker.Unlock()
 	a.cron.Remove(a.CronId)
+	return nil
 }
