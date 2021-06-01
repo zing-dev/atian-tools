@@ -103,14 +103,15 @@ func (a *App) GetStatus() device.StatusType {
 }
 
 func (a *App) Run() error {
-	if a.GetStatus() == device.Connecting || a.GetStatus() == device.Connected {
+	status := a.GetStatus()
+	if status == device.Connecting || status == device.Connected {
 		return errors.New(fmt.Sprintf("设备 %s 已经正在运行中", a.DTS.Host))
 	}
 	if len(a.CallTypes) == 0 {
 		a.CallTypes = []CallType{CallAlarm, CallTemp}
 	}
 	a.Client = dtssdk.NewDTSClient(a.DTS.Host)
-	a.setStatus(device.Disconnect)
+	a.setStatus(device.Connecting)
 	a.Client.CallConnected(func(s string) {
 		a.SyncZones()
 		a.setStatus(device.Connected)
@@ -331,44 +332,60 @@ func (a *App) Destroy() {
 	select {
 	case <-a.ChanStatus:
 	default:
-		close(a.ChanStatus)
+		if a.ChanStatus != nil {
+			close(a.ChanStatus)
+		}
 	}
 	select {
 	case <-a.ChanMessage:
 	default:
-		close(a.ChanMessage)
+		if a.ChanMessage != nil {
+			close(a.ChanMessage)
+		}
 	}
 	select {
 	case <-a.ChanZonesTemp:
 	default:
-		close(a.ChanZonesTemp)
+		if a.ChanZonesTemp != nil {
+			close(a.ChanZonesTemp)
+		}
 	}
 	select {
 	case <-a.ChanChannelEvent:
 	default:
-		close(a.ChanChannelEvent)
+		if a.ChanChannelEvent != nil {
+			close(a.ChanChannelEvent)
+		}
 	}
 	select {
 	case <-a.ChanChannelSignal:
 	default:
-		close(a.ChanChannelSignal)
+		if a.ChanChannelSignal != nil {
+			close(a.ChanChannelSignal)
+		}
 	}
 	select {
 	case <-a.ChanZonesAlarm:
 	default:
-		close(a.ChanZonesAlarm)
+		if a.ChanZonesAlarm != nil {
+			close(a.ChanZonesAlarm)
+		}
 	}
 }
 
-// Close 关闭继电器
+// Close 关闭DTS
 func (a *App) Close() error {
 	a.cancel()
-	if a.GetStatus() != device.Disconnect {
+	status := a.GetStatus()
+	if status == device.Connecting || status == device.Connected {
 		a.Client.Close()
 	}
 	for _, id := range a.CronIds {
 		a.Cron.Remove(id)
 	}
+	a.setMessage(fmt.Sprintf("主机为 %s 的dts断开连接", a.DTS.Host), logrus.WarnLevel)
+	a.setStatus(device.Disconnect)
+	time.AfterFunc(time.Second*3, a.Destroy)
 	return nil
 }
 
