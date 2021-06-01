@@ -330,6 +330,11 @@ func (a *App) SetCron(cron *cron.Cron) {
 
 // Close 关闭继电器
 func (a *App) Close() {
+	a.cancel()
+	if a.GetStatus() == device.Connected {
+		a.Client.Close()
+	}
+	time.Sleep(time.Millisecond)
 	for _, id := range a.CronIds {
 		a.Cron.Remove(id)
 	}
@@ -351,10 +356,6 @@ func (a *App) Close() {
 	if a.ChanZonesAlarm != nil {
 		close(a.ChanZonesAlarm)
 	}
-	if a.GetStatus() == device.Connected {
-		a.Client.Close()
-	}
-	a.cancel()
 }
 
 func (a *App) Status() device.StatusType {

@@ -19,9 +19,12 @@ const (
 	timeFormat   = "2006-01-02 15:04:05"
 )
 
-var L logrus.Logger
+var (
+	L    logrus.Logger
+	Path = "./logs"
+)
 
-func init() {
+func Init() {
 	//控制台logger
 	L = logrus.Logger{
 		Out:   os.Stdout,
@@ -55,7 +58,7 @@ func init() {
 		"fatal": logrus.FatalLevel,
 	} {
 		f, err := rotatelogs.New(
-			"./logs/%Y-%m-%d/"+fmt.Sprintf("%s.log", k),
+			fmt.Sprintf("%s/%s/%s.log", Path, "%Y-%m-%d", k),
 			rotatelogs.WithMaxAge(maxAge),
 			rotatelogs.WithRotationTime(rotationTime),
 		)

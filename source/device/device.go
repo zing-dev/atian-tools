@@ -3,7 +3,7 @@ package device
 import (
 	"context"
 	"github.com/robfig/cron/v3"
-	"log"
+	"github.com/zing-dev/atian-tools/log"
 	"sync"
 )
 
@@ -99,11 +99,13 @@ func (m *Manger) Update(device Device) {
 }
 
 func (m *Manger) Delete(device Device) {
-	m.devices.LoadAndDelete(device.GetId())
-	m.emit(EventListener{
-		Device:    device,
-		EventType: EventDelete,
-	})
+	value, ok := m.devices.LoadAndDelete(device.GetId())
+	if ok {
+		m.emit(EventListener{
+			Device:    value.(Device),
+			EventType: EventDelete,
+		})
+	}
 }
 
 func (m *Manger) GetDevice(id string) Device {
@@ -152,7 +154,7 @@ func (m *Manger) emit(event EventListener) {
 	select {
 	case m.event <- event:
 	default:
-		log.Println("lost")
+		log.L.Error("event lost")
 	}
 }
 
