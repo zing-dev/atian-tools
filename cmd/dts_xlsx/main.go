@@ -13,7 +13,13 @@ import (
 func main() {
 	log.Init()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour*241)
-	host := "192.168.0.215"
+	host := "192.168.0.86"
+	store := xlsx.New(ctx, xlsx.Config{
+		Host:          host,
+		Dir:           "./xlsx",
+		MinTempMinute: 1,
+		MinSaveHour:   6,
+	})
 	app := dts.New(ctx, dts.DTS{Id: 1, Host: host}, dts.Config{ChannelNum: 4, ZonesTempInterval: 6})
 	time.AfterFunc(time.Hour*240, cancel)
 	app.CallTypes = []dts.CallType{dts.CallTemp}
@@ -21,12 +27,6 @@ func main() {
 	if err != nil {
 		log.L.Fatal(err)
 	}
-	store := xlsx.New(ctx, xlsx.Config{
-		Host:          host,
-		Dir:           "./xlsx",
-		MinTempMinute: 1,
-		MinSaveHour:   6,
-	})
 	for {
 		select {
 		case <-app.Context.Done():
