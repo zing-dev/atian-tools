@@ -95,14 +95,15 @@ func (m *Manger) Add(device Device) {
 }
 
 // Run 运行设备
-func (m *Manger) Run(id string) {
-	value, ok := m.devices.Load(id)
-	if ok {
+func (m *Manger) Run(id string) error {
+	if value, ok := m.devices.Load(id); ok {
 		m.emit(Event{
 			Device:    value.(Device),
 			EventType: EventRun,
 		})
+		return nil
 	}
+	return NotFoundDeviceError
 }
 
 // Update 更新设备
@@ -115,25 +116,27 @@ func (m *Manger) Update(device Device) {
 }
 
 // Close 关闭设备
-func (m *Manger) Close(id string) {
-	value, ok := m.devices.Load(id)
-	if ok {
+func (m *Manger) Close(id string) error {
+	if value, ok := m.devices.Load(id); ok {
 		m.emit(Event{
 			Device:    value.(Device),
 			EventType: EventClose,
 		})
+		return nil
 	}
+	return NotFoundDeviceError
 }
 
 // Delete 根据 id 删除设备
-func (m *Manger) Delete(device Device) {
-	value, ok := m.devices.LoadAndDelete(device.GetId())
-	if ok {
+func (m *Manger) Delete(id string) error {
+	if value, ok := m.devices.LoadAndDelete(id); ok {
 		m.emit(Event{
 			Device:    value.(Device),
 			EventType: EventDelete,
 		})
+		return nil
 	}
+	return NotFoundDeviceError
 }
 
 // GetDevice 根据 id 获取设备
@@ -183,9 +186,8 @@ func (m *Manger) GetStatus() []Status {
 
 // Length 获取设备的数量
 func (m *Manger) Length() (length int) {
-	m.devices.Range(func(key, value interface{}) bool {
+	m.Range(func(s string, device Device) {
 		length++
-		return true
 	})
 	return
 }

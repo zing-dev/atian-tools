@@ -24,11 +24,24 @@ type Relay struct {
 	ResetTime string
 	Client    http.Client
 	Tag       string
-	Url       string
+	URL       string
 	Cron      *cron.Cron
 	CronId    cron.EntryID
 	locker    sync.Mutex
 	status    StatusType
+}
+
+func NewRelay(ctx context.Context, tag, url, reset string) *Relay {
+	ctx, cancel := context.WithCancel(ctx)
+	return &Relay{
+		ctx:       ctx,
+		cancel:    cancel,
+		ResetTime: reset,
+		Client:    http.Client{Timeout: time.Second * 3},
+		Tag:       tag,
+		URL:       url,
+		status:    UnConnect,
+	}
 }
 
 func (r *Relay) GetId() string {
@@ -56,9 +69,9 @@ func (r *Relay) GetStatus() StatusType {
 }
 
 func (r *Relay) Reset(branch string) {
-	url := fmt.Sprintf("%s/api/off/%s", r.Url, branch)
+	url := fmt.Sprintf("%s/api/off/%s", r.URL, branch)
 	if branch == "" {
-		url = fmt.Sprintf("%s/api/off-all", r.Url)
+		url = fmt.Sprintf("%s/api/off-all", r.URL)
 	}
 	resp, err := r.Client.Get(url)
 	if err != nil {
@@ -73,9 +86,9 @@ func (r *Relay) Reset(branch string) {
 }
 
 func (r *Relay) Alarm(branch string) {
-	host := fmt.Sprintf("%s/api/on/%s", r.Url, branch)
+	host := fmt.Sprintf("%s/api/on/%s", r.URL, branch)
 	if r.ResetTime != "" {
-		host = fmt.Sprintf("%s/api/on-point/%s/%s000", r.Url, branch, r.ResetTime)
+		host = fmt.Sprintf("%s/api/on-point/%s/%s000", r.URL, branch, r.ResetTime)
 	}
 	resp, err := r.Client.Get(host)
 	if err != nil {
@@ -91,7 +104,7 @@ func (r *Relay) Alarm(branch string) {
 
 func (r *Relay) ping() {
 	r.setStatus(Connecting)
-	resp, err := r.Client.Get(fmt.Sprintf("%s%s", r.Url, ApiPing))
+	resp, err := r.Client.Get(fmt.Sprintf("%s%s", r.URL, ApiPing))
 	if err != nil {
 		r.setStatus(Disconnect)
 		return
@@ -120,6 +133,7 @@ func (r *Relay) Run() error {
 func (r *Relay) Close() error {
 	r.locker.Lock()
 	defer r.locker.Unlock()
+	r.cancel()
 	r.Cron.Remove(r.CronId)
 	return nil
 }

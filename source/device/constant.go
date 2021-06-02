@@ -2,6 +2,7 @@ package device
 
 import (
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"time"
@@ -138,4 +139,8 @@ type (
 		Color  string `json:"color,omitempty"`
 		Commit string `json:"commit,omitempty"`
 	}
+)
+
+var (
+	NotFoundDeviceError = errors.New("未找到当前设备")
 )

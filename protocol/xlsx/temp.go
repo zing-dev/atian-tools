@@ -101,6 +101,8 @@ func (x *Store) Rename() {
 			log.L.Error("创建保存温度更新文件夹失败")
 		}
 	}
+	x.sheets = map[string]int{}
+	x.columns = map[string]int{}
 	x.Path = fmt.Sprintf("%s/%s", dir, x.Config.GetName())
 }
 
