@@ -109,7 +109,7 @@ func (r *Relay) Run() error {
 		Timeout: time.Second * 3,
 	}
 	r.ping()
-	id, err := r.Cron.AddFunc("* */1 * * * *", r.ping)
+	id, err := r.Cron.AddFunc("0 */1 * * * *", r.ping)
 	if err != nil {
 		return err
 	}

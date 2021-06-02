@@ -95,29 +95,23 @@ func (x *Store) Save() {
 	}
 }
 
-func (x *Store) New() {
+func (x *Store) Create() {
+	if x.File != nil && x.check(x.Path) {
+		return
+	}
 	dir := fmt.Sprintf("%s/%s", x.Config.Dir, x.Config.Host)
 	path := fmt.Sprintf("%s/%s", dir, x.Config.GetName())
-	f, err := excelize.OpenFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			_, err := os.Open(dir)
-			if os.IsNotExist(err) {
-				err := os.MkdirAll(dir, 0777)
-				if err != nil {
-					log.L.Error("store", "创建保存温度更新文件夹失败")
-				}
-			}
-			x.File = excelize.NewFile()
-			x.File.Path = path
-			x.sheets = make(map[string]int)
-			x.columns = make(map[string]int)
-		} else {
-			log.L.Error(fmt.Sprintf("store: 打开 %s 失败", x.Config.name))
+	_, err := os.Open(dir)
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(dir, 0777)
+		if err != nil {
+			log.L.Error("store", "创建保存温度更新文件夹失败")
 		}
-	} else {
-		x.File = f
 	}
+	x.File = excelize.NewFile()
+	x.File.Path = path
+	x.sheets = make(map[string]int)
+	x.columns = make(map[string]int)
 }
 
 func (x *Store) write(channel string, sortZones dts.SortZones) {
@@ -150,11 +144,11 @@ func (x *Store) write(channel string, sortZones dts.SortZones) {
 
 func (x *Store) Write() {
 	//保存温度间隔的数据
-	id, err := x.Cron.AddFunc(fmt.Sprintf("2 */%d * * * *", x.Config.MinTempMinute), func() {
+	id, err := x.Cron.AddFunc(fmt.Sprintf("0 */%d * * * *", x.Config.MinTempMinute), func() {
 		select {
 		case temp := <-x.Temp:
+			x.Create()
 			log.L.Info(fmt.Sprintf("开始保存主机 %s 的温度数据", x.Config.Host))
-			x.New()
 			zones := dts.SortZones(temp.Zones)
 			dts.OrderedBy(func(p1, p2 *dts.Zone) bool {
 				return p1.ChannelId < p2.ChannelId
@@ -177,28 +171,25 @@ func (x *Store) Write() {
 	x.CronIds[id] = struct{}{}
 
 	if x.Config.MinSaveHour == 0 {
-		id2, err := x.Cron.AddFunc(fmt.Sprintf("0 0 0 * * *"), func() {
-			x.Config.GetName()
-			x.sheets = make(map[string]int)
-			x.columns = make(map[string]int)
-		})
+		id2, err := x.Cron.AddFunc(fmt.Sprintf("0 0 0 * * *"), x.Create)
 		if err != nil {
 			return
 		}
 		x.CronIds[id2] = struct{}{}
 	} else {
 		//保存到文件的数据
-		id2, err := x.Cron.AddFunc(fmt.Sprintf("0 0 */%d * * *", x.Config.MinSaveHour), func() {
-			x.Config.GetName()
-			x.sheets = make(map[string]int)
-			x.columns = make(map[string]int)
-		})
+		id2, err := x.Cron.AddFunc(fmt.Sprintf("0 0 */%d * * *", x.Config.MinSaveHour), x.Create)
 		if err != nil {
 			return
 		}
 		x.CronIds[id2] = struct{}{}
 		x.Cron.Start()
 	}
+}
+
+func (x *Store) check(path string) bool {
+	_, err := excelize.OpenFile(path)
+	return os.IsExist(err)
 }
 
 func (x *Store) Store(temp dts.ZonesTemp) {

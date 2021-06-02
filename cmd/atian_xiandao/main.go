@@ -73,7 +73,10 @@ func (app *App) run() {
 			go func() {
 				for {
 					select {
-					case <-time.After(time.Second * 30):
+					case <-a.Context.Done():
+						a.Client.Close()
+						return
+					case <-time.After(time.Minute):
 						if a.GetStatus() != device.Connected {
 							log.L.Error(fmt.Sprintf("主机 %s 不在线", a.DTS.Host))
 						} else {
@@ -112,6 +115,7 @@ func (app *App) run() {
 
 func (app *App) stop() error {
 	app.cancel()
+	time.Sleep(time.Millisecond)
 	return nil
 }
 

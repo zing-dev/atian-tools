@@ -3,18 +3,24 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/zing-dev/atian-tools/log"
 	"github.com/zing-dev/atian-tools/protocol/xlsx"
 	"github.com/zing-dev/atian-tools/source/atian/dts"
-	"log"
+	"github.com/zing-dev/atian-tools/source/device"
 	"time"
 )
 
 func main() {
+	log.Init()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour*241)
 	host := "192.168.0.215"
 	app := dts.New(ctx, dts.DTS{Id: 1, Host: host}, dts.Config{ChannelNum: 4, ZonesTempInterval: 6})
 	time.AfterFunc(time.Hour*240, cancel)
-	app.Run()
+	app.CallTypes = []dts.CallType{dts.CallTemp}
+	err := app.Run()
+	if err != nil {
+		log.L.Fatal(err)
+	}
 	store := xlsx.New(ctx, xlsx.Config{
 		Host:          host,
 		Dir:           "./xlsx",
@@ -27,8 +33,19 @@ func main() {
 			app.Client.Close()
 			fmt.Println("out")
 			return
+		case status := <-app.ChanStatus:
+			log.L.Info(status)
+			if status == device.Connected {
+				app.SyncZones()
+				err := app.Register()
+				if err != nil {
+					log.L.Fatal(err)
+				} else {
+					log.L.Info("注册成功")
+				}
+			}
 		case temp := <-app.ChanZonesTemp:
-			log.Println("temp", temp.DeviceId)
+			log.L.Info("temp", temp.DeviceId)
 			store.Store(temp)
 		}
 	}

@@ -113,13 +113,8 @@ func (a *App) Run() error {
 	a.Client = dtssdk.NewDTSClient(a.DTS.Host)
 	a.setStatus(device.Connecting)
 	a.Client.CallConnected(func(s string) {
-		a.SyncZones()
 		a.setStatus(device.Connected)
 		a.setMessage(fmt.Sprintf("主机为 %s 的dts连接成功", s), logrus.InfoLevel)
-		err := a.call()
-		if err != nil {
-			a.setMessage(err.Error(), logrus.ErrorLevel)
-		}
 	})
 
 	a.Client.OnTimeout(func(s string) {
@@ -134,7 +129,7 @@ func (a *App) Run() error {
 	return nil
 }
 
-func (a *App) call() (err error) {
+func (a *App) Register() (err error) {
 	err = errors.New("")
 	start := time.Now()
 START:
@@ -212,6 +207,7 @@ START:
 					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受报警回调", a.DTS.Host), logrus.InfoLevel)
 				}
 			case CallTemp:
+				a.setMessage(fmt.Sprintf("主机为 %s 的dts 注册 接受温度回调", a.DTS.Host), logrus.InfoLevel)
 				a.ChanZonesTemp = make(chan ZonesTemp, 30)
 				err = a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
 					value, ok := a.ZonesTemp.LoadOrStore(notify.GetDeviceID(), notify)
@@ -244,6 +240,10 @@ START:
 						index++
 					}
 					zones = zones[:index]
+					if len(zones) == 0 {
+						a.setMessage(fmt.Sprintf("更新温度, 主机为 %s 的dts防区为空", a.DTS.Host), logrus.ErrorLevel)
+						return
+					}
 					select {
 					case a.ChanZonesTemp <- ZonesTemp{
 						DTS:       a.DTS,
@@ -258,6 +258,8 @@ START:
 				if err != nil {
 					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受温度回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
 					break START
+				} else {
+					a.setMessage(fmt.Sprintf("主机为 %s 的dts接受温度回调", a.DTS.Host), logrus.InfoLevel)
 				}
 			case CallSignal:
 				a.ChanChannelSignal = make(chan ChannelSignal, 30)
