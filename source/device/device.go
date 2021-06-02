@@ -88,6 +88,7 @@ func (m *Manger) Adds(devices ...Device) {
 // Add 添加设备
 func (m *Manger) Add(device Device) {
 	m.devices.Store(device.GetId(), device)
+	device.SetCron(m.Cron) //定时任务
 	m.emit(Event{
 		Device:    device,
 		EventType: EventAdd,
@@ -109,6 +110,7 @@ func (m *Manger) Run(id string) error {
 // Update 更新设备
 func (m *Manger) Update(device Device) {
 	m.devices.Store(device.GetId(), device)
+	device.SetCron(m.Cron) //定时任务
 	m.emit(Event{
 		Device:    device,
 		EventType: EventUpdate,

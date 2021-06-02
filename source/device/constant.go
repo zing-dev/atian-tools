@@ -18,10 +18,10 @@ const (
 )
 
 const (
-	_ Type = iota
-	TypeDTS
-	TypeRelay
-	TypeApi
+	_         Type = iota
+	TypeDTS        //DTS
+	TypeRelay      //继电器
+	TypeApi        //HTTP API 接口
 )
 
 const (
@@ -34,11 +34,11 @@ const (
 	EventDelete
 )
 const (
-	_ StatusType = iota
-	UnConnect
-	Connecting
-	Connected
-	Disconnect
+	_          StatusType = iota
+	UnConnect             //未连接
+	Connecting            //连接中
+	Connected             //已连接
+	Disconnect            //已断开
 )
 
 func (s *Type) String() string {

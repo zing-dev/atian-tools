@@ -129,6 +129,7 @@ func (a *App) Run() error {
 	return nil
 }
 
+// Register 在连接成功后回调该函数!!!
 func (a *App) Register() (err error) {
 	err = errors.New("")
 	start := time.Now()
