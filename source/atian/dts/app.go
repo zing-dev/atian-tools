@@ -248,12 +248,13 @@ START:
 							continue
 						}
 
-						zones[index] = z
-						zones[index].Temperature = &Temperature{
-							Max: zone.GetMaxTemperature(),
-							Avg: zone.GetAverageTemperature(),
-							Min: zone.GetMinTemperature(),
-							At:  &device.TimeLocal{Time: time.Unix(notify.GetTimestamp()/1000, 0)},
+						zones[index] = &Zone{
+							BaseZone: BaseZone{Id: id, ChannelId: z.ChannelId},
+							Temperature: &Temperature{
+								Max: zone.GetMaxTemperature(),
+								Avg: zone.GetAverageTemperature(),
+								Min: zone.GetMinTemperature(),
+							},
 						}
 						index++
 					}
