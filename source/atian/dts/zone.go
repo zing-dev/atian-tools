@@ -156,6 +156,7 @@ func GetEventTypeString(t model.FiberState) string {
 	}
 }
 
+// Deprecated
 func (s *Status) String() string {
 	switch *s {
 	case StatusOnline:
@@ -170,28 +171,38 @@ func (s *Status) String() string {
 
 const (
 	_ Status = iota
+	// StatusOnline
+	// Deprecated
 	StatusOnline
+	// StatusOff
+	// Deprecated
 	StatusOff
+	// StatusRetry
+	// Deprecated
 	StatusRetry
 
-	TagSeparator      = ";"
+	// TagSeparator 标签分隔符
+	TagSeparator = ";"
+	// TagValueSeparator 标签名和值分隔符
 	TagValueSeparator = "="
 
-	// TagWarehouse 仓库
-	TagWarehouse = "warehouse|库" //示例 warehouse:w01
-	// TagGroup 组
-	TagGroup = "group|组" //示例 group:g001
-	// TagRow 行
-	TagRow = "row|行" //示例 row:1
-	// TagColumn 列
-	TagColumn = "column|列" //示例 column:1
-	// TagLayer 层
-	TagLayer = "layer|层" //示例 layer:1
-
-	TagRelay = "relay|继电器" //示例 relay:A1,2,3,4
+	// TagWarehouse 防区所属 仓库
+	TagWarehouse = "warehouse|Warehouse|库" //示例 warehouse:w01
+	// TagGroup 防区所属 组
+	TagGroup = "group|Group|w|W|组" //示例 group:g001
+	// TagRow 防区所属 行
+	TagRow = "row|Row|x|X|行|" //示例 row:1
+	// TagColumn 防区所属 列
+	TagColumn = "column|Column|y|Y|列" //示例 column:1
+	// TagLayer 防区所属 层
+	TagLayer = "layer|Layer|z|Z|层" //示例 layer:1
+	// TagRelay 防区所属 继电器
+	TagRelay = "relay|Relay|继电器" //示例 relay:A1,2,3,4
 )
 
 type (
+	// Status
+	// Deprecated
 	Status byte
 
 	// TimeLocal 本地时间常量
@@ -448,6 +459,9 @@ func NewRelay(tag map[string]string) (Relay, error) {
 			continue
 		} else if len(r) < 2 {
 			return nil, errors.New("继电器标签字符值至少两位,例如A1")
+		} else if ok, _ := regexp.MatchString("^([1-9]*[1-9][0-9]*_)+[1-9]*[1-9][0-9]*$", r[1:]); ok {
+			//兼容这种形式 A1_2_3_4
+			return Relay{r[0]: strings.ReplaceAll(r[1:], "_", ",")}, nil
 		} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
 			return nil, errors.New(fmt.Sprintf("继电器标签模式不匹配: %s, 必须如A1,2,3,4", err))
 		} else {
@@ -477,6 +491,9 @@ func NewCoordinate(tag map[string]string) (*Coordinate, error) {
 				attr[i].value = uint16(value)
 				break
 			}
+		}
+		if attr[i].value == 0 {
+			return nil, errors.New(fmt.Sprintf("解析 %s 错误,无匹配的标签 %s", s.name, s.tag))
 		}
 	}
 

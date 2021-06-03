@@ -404,6 +404,9 @@ func (a *App) setStatus(s device.StatusType) {
 	a.locker.Lock()
 	a.status = s
 	a.locker.Unlock()
+	if a.ChanStatus == nil {
+		return
+	}
 	select {
 	case a.ChanStatus <- s:
 	default:
