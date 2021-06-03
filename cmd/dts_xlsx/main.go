@@ -20,7 +20,7 @@ func main() {
 		MinTempMinute: 1,
 		MinSaveHour:   6,
 	})
-	app := dts.New(ctx, dts.DTS{Id: 1, Host: host}, dts.Config{ChannelNum: 4, ZonesTempInterval: 6})
+	app := dts.New(ctx, dts.DTS{Id: 1, Host: host}, dts.Config{ChannelNum: 4, ZonesTempSec: 6})
 	time.AfterFunc(time.Hour*240, cancel)
 	app.CallTypes = []dts.CallType{dts.CallTemp}
 	err := app.Run()

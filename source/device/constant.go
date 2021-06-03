@@ -15,6 +15,11 @@ const (
 	ColorInfo    = "info"
 	ColorWarning = "warning"
 	ColorDanger  = "danger"
+
+	// LocalDateTimeFormat 基于中国的时间格式化模板
+	LocalDateTimeFormat = "2006-01-02 15:04:05"
+	LocalDateFormat     = "2006-01-02"
+	LocalTimeFormat     = "15:04:05"
 )
 
 const (
@@ -89,7 +94,7 @@ func GetDeviceMap() []Constant {
 }
 
 func (t TimeLocal) MarshalJSON() ([]byte, error) {
-	return []byte(t.Format(`"2006-01-02 15:04:05"`)), nil
+	return []byte(t.Format(fmt.Sprintf(`"%s"`, LocalDateTimeFormat))), nil
 }
 
 func (t *TimeLocal) UnmarshalJSON(data []byte) error {
@@ -97,7 +102,7 @@ func (t *TimeLocal) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	var err error
-	t.Time, err = time.Parse(`"`+"2006-01-02 15:04:05"+`"`, string(data))
+	t.Time, err = time.Parse(fmt.Sprintf(`"%s"`, LocalDateTimeFormat), string(data))
 	return err
 }
 
@@ -116,6 +121,10 @@ func (t *TimeLocal) Scan(v interface{}) error {
 		return nil
 	}
 	return fmt.Errorf("can not convert %v to timestamp", v)
+}
+
+func (t TimeLocal) String() string {
+	return t.Format(LocalDateTimeFormat)
 }
 
 type (

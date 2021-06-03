@@ -117,10 +117,6 @@ func (r *Relay) ping() {
 }
 
 func (r *Relay) Run() error {
-	r.status = UnConnect
-	r.Client = http.Client{
-		Timeout: time.Second * 3,
-	}
 	r.ping()
 	id, err := r.Cron.AddFunc("0 */1 * * * *", r.ping)
 	if err != nil {

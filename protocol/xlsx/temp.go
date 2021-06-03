@@ -1,7 +1,9 @@
 package xlsx
 
 import (
+	"archive/zip"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/robfig/cron/v3"
@@ -139,13 +141,27 @@ func (x *Store) Write() {
 	select {
 	case temp := <-x.Temp:
 		log.L.Info(fmt.Sprintf("%s 开始保存主机 %s 的温度数据文件名 %s", temp.CreatedAt, x.Config.Host, x.Path))
+		x.Lock()
 		x.file, err = excelize.OpenFile(x.Path)
-		if os.IsNotExist(err) {
-			x.file = excelize.NewFile()
-			x.file.Path = x.Path
-			x.columns = map[string]int{}
-			x.sheets = map[string]int{}
+		if err != nil {
+			if os.IsNotExist(err) {
+				x.file = excelize.NewFile()
+				x.file.Path = x.Path
+				x.columns = map[string]int{}
+				x.sheets = map[string]int{}
+			} else if errors.Is(err, zip.ErrFormat) {
+				x.file = excelize.NewFile()
+				x.file.Path = x.Path + EXT
+				x.columns = map[string]int{}
+				x.sheets = map[string]int{}
+			} else {
+				log.L.Error(fmt.Sprintf("打开主机 %s XLSX %s 失败: %s", x.Config.Host, x.Path, err))
+				x.Unlock()
+				return
+			}
 		}
+		x.Unlock()
+
 		zones := dts.SortZones(temp.Zones)
 		dts.OrderedBy(func(p1, p2 *dts.Zone) bool {
 			return p1.ChannelId < p2.ChannelId

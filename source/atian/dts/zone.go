@@ -206,9 +206,11 @@ type (
 	Status byte
 
 	// TimeLocal 本地时间常量
+	// Deprecated
 	TimeLocal struct {
 		time.Time
 	}
+
 	// Tag 标签 形如 k1=v1;k2=v2
 	// 标签 warehouse=w1;group=g1;row=1;column=1;layer=1;relay=A1,2,3,4,5
 	// Map {warehouse:w1,group:g1,row:1,column:1,layer:1,relay:A1,2,3,4,5}
@@ -218,16 +220,16 @@ type (
 
 	// Temperature 温度信息
 	Temperature struct {
-		Max float32    `json:"max"`          //最大温度
-		Avg float32    `json:"avg"`          //平均温度
-		Min float32    `json:"min"`          //最小温度
-		At  *TimeLocal `json:"at,omitempty"` //产生温度的时间
+		Max float32           `json:"max"`          //最大温度
+		Avg float32           `json:"avg"`          //平均温度
+		Min float32           `json:"min"`          //最小温度
+		At  *device.TimeLocal `json:"at,omitempty"` //产生温度的时间
 	}
 
 	// Alarm 报警防区信息
 	Alarm struct {
 		Location float32                `json:"location"` //防区报警位置
-		At       *TimeLocal             `json:"at"`       //报警时间
+		At       *device.TimeLocal      `json:"at"`       //报警时间
 		State    model.DefenceAreaState `json:"state"`    //报警类型
 	}
 
@@ -293,42 +295,42 @@ type (
 
 	// ZonesTemp DTS所有防区温度
 	ZonesTemp struct {
-		DTS       DTS        `json:"dts,omitempty"`
-		DeviceId  string     `json:"device_id"`
-		Host      string     `json:"host,omitempty"`
-		CreatedAt *TimeLocal `json:"created_at"`
-		Zones     Zones      `json:"zones"`
+		DTS       DTS               `json:"dts,omitempty"`
+		DeviceId  string            `json:"device_id"`
+		Host      string            `json:"host,omitempty"`
+		CreatedAt *device.TimeLocal `json:"created_at"`
+		Zones     Zones             `json:"zones"`
 	}
 
 	// ZonesAlarm 报警防区信息集合
 	ZonesAlarm struct {
-		DTS       DTS        `json:"dts,omitempty"`
-		DeviceId  string     `json:"device_id"`
-		Host      string     `json:"host,omitempty"`
-		CreatedAt *TimeLocal `json:"created_at"`
-		Zones     Zones      `json:"zones"`
+		DTS       DTS               `json:"dts,omitempty"`
+		DeviceId  string            `json:"device_id"`
+		Host      string            `json:"host,omitempty"`
+		CreatedAt *device.TimeLocal `json:"created_at"`
+		Zones     Zones             `json:"zones"`
 	}
 
 	// ChannelSignal DTS某一通道温度信号
 	ChannelSignal struct {
-		DTS        DTS        `json:"dts,omitempty"`
-		DeviceId   string     `json:"device_id"`
-		Host       string     `json:"host,omitempty"`
-		ChannelId  int32      `json:"channel_id"`
-		CreatedAt  *TimeLocal `json:"created_at"`
-		RealLength float32    `json:"real_length"`
-		Signal     []float32  `json:"signal"`
+		DTS        DTS               `json:"dts,omitempty"`
+		DeviceId   string            `json:"device_id"`
+		Host       string            `json:"host,omitempty"`
+		ChannelId  int32             `json:"channel_id"`
+		CreatedAt  *device.TimeLocal `json:"created_at"`
+		RealLength float32           `json:"real_length"`
+		Signal     []float32         `json:"signal"`
 	}
 
 	// ChannelEvent  DTS某一通道事件
 	ChannelEvent struct {
-		DTS           DTS              `json:"dts,omitempty"`
-		Host          string           `json:"host,omitempty"`
-		ChannelId     int32            `json:"channel_id"`
-		DeviceId      string           `json:"device_id"`
-		EventType     model.FiberState `json:"event_type"`
-		ChannelLength float32          `json:"channel_length"`
-		CreatedAt     *TimeLocal       `json:"created_at"`
+		DTS           DTS               `json:"dts,omitempty"`
+		Host          string            `json:"host,omitempty"`
+		ChannelId     int32             `json:"channel_id"`
+		DeviceId      string            `json:"device_id"`
+		EventType     model.FiberState  `json:"event_type"`
+		ChannelLength float32           `json:"channel_length"`
+		CreatedAt     *device.TimeLocal `json:"created_at"`
 	}
 )
 

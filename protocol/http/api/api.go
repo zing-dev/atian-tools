@@ -138,7 +138,6 @@ func (a *Api) Post(request Request) (*Response, error) {
 }
 
 func (a *Api) Run() error {
-	a.Client = http.Client{Timeout: time.Second * 3}
 	id, err := a.cron.AddFunc("0 */1 * * * *", a.ping)
 	if err != nil {
 		return err
