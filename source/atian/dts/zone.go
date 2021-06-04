@@ -250,7 +250,7 @@ type (
 		Id       uint   `json:"id"`
 		Name     string `json:"name"`
 		Host     string `json:"host"`
-		OfficeId string `json:"office_id"`
+		OfficeId string `json:"office_id,omitempty"`
 	}
 
 	// Zone 防区信息

@@ -63,15 +63,7 @@ func Register(s *neffos.Server) {
 }
 
 func Send(body []byte, server *neffos.Server) {
-	for _, conn := range server.GetConnections() {
-		ok := conn.Write(neffos.Message{
-			Body:     body,
-			IsNative: true,
-		})
-		if !ok {
-			continue
-		}
-	}
+	server.Broadcast(nil, neffos.Message{Body: body, IsNative: true})
 }
 
 func Write(data interface{}, server *neffos.Server) {

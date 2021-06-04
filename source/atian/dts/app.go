@@ -38,7 +38,7 @@ type App struct {
 	cancel  context.CancelFunc
 
 	Client *dtssdk.Client
-	Config Config
+	config *Config
 	DTS    DTS
 
 	CallTypes []CallType
@@ -62,24 +62,12 @@ type App struct {
 	locker             sync.Mutex
 }
 
-func New(ctx context.Context, dts DTS, config Config) *App {
-	if config.ZonesAlarmSec <= 0 {
-		config.ZonesAlarmSec = 20
-	}
-	if config.ZonesTempSec <= 0 {
-		config.ZonesTempSec = 60
-	}
-	if config.ChanSignSec <= 0 {
-		config.ChanSignSec = 60
-	}
-	if config.ChannelNum == 0 {
-		config.ChannelNum = 4
-	}
+func New(ctx context.Context, dts DTS, config *Config) *App {
 	ctx, cancel := context.WithCancel(ctx)
 	return &App{
 		Context:     ctx,
 		cancel:      cancel,
-		Config:      config,
+		config:      config,
 		DTS:         dts,
 		status:      device.UnConnect,
 		ChanMessage: make(chan device.Message, 0),
@@ -151,7 +139,7 @@ START:
 					for _, zone := range notify.GetZones() {
 						//若当前报警防区已存在缓存中,且当前报警时间与上一个报警时间的间隔小于报警阈值,则不处理
 						value, ok := a.ZonesTemp.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), Id(a.DTS.Id, uint(zone.ID))), notify.GetTimestamp())
-						if ok && time.Now().Sub(time.Unix(value.(int64)/1000, 0)) < time.Second*time.Duration(a.Config.ZonesAlarmSec) {
+						if ok && time.Now().Sub(time.Unix(value.(int64)/1000, 0)) < time.Second*time.Duration(a.GetConfig().ZonesAlarmSec) {
 							return
 						}
 						//缓存当前报警防区
@@ -227,7 +215,7 @@ START:
 
 					//若当前温度更新防区已存在缓存中,且当前温度更新时间与上一个温度更新时间的间隔小于温度更新阈值,则不处理
 					value, ok := a.ZonesTemp.LoadOrStore(notify.GetDeviceID(), notify)
-					if ok && time.Now().Sub(time.Unix(value.(*model.ZoneTempNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ZonesTempSec) {
+					if ok && time.Now().Sub(time.Unix(value.(*model.ZoneTempNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.GetConfig().ZonesTempSec) {
 						return
 					}
 					a.ZonesTemp.Store(notify.GetDeviceID(), notify)
@@ -286,7 +274,7 @@ START:
 				a.ChanChannelSignal = make(chan ChannelSignal, 30)
 				err = a.Client.CallTempSignalNotify(func(notify *model.TempSignalNotify, err error) {
 					value, ok := a.ZonesChannelSignal.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), notify.ChannelID), notify)
-					if ok && time.Now().Sub(time.Unix(value.(*model.TempSignalNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.Config.ChanSignSec) {
+					if ok && time.Now().Sub(time.Unix(value.(*model.TempSignalNotify).GetTimestamp()/1000, 0)) < time.Second*time.Duration(a.GetConfig().ChanSignSec) {
 						return
 					}
 					length := len(notify.GetSignal())
@@ -465,6 +453,7 @@ func (a *App) GetZones() map[uint]*Zone {
 
 // GetSyncChannelZones 根据通道 Id 获取防区集合
 func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
+	config := a.GetConfig()
 	response, err := a.Client.GetDefenceZone(int(channelId), "")
 	if err != nil {
 		return nil, err
@@ -485,19 +474,19 @@ func (a *App) GetSyncChannelZones(channelId byte) (Zones, error) {
 			Finish:    v.GetFinish(),
 			Host:      a.DTS.Host,
 		}
-		if v.Tag == "" && (a.Config.Coordinate || a.Config.Relay) {
+		if v.Tag == "" && (config.Coordinate || config.Relay) {
 			log.L.Warn(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 标签为空", a.DTS.Host, channelId, v.ZoneName))
 			continue
 		}
 		zones[k].Tag = DecodeTags(v.GetTag())
-		if a.Config.Relay {
+		if config.Relay {
 			relay, err := NewRelay(zones[k].Tag)
 			if err != nil {
 				continue
 			}
 			zones[k].Relay = relay
 		}
-		if a.Config.Coordinate {
+		if config.Coordinate {
 			coordinate, err := NewCoordinate(zones[k].Tag)
 			if err != nil {
 				log.L.Error(fmt.Sprintf("获取主机 %s 通道 %d 防区 %s 坐标失败: %s", a.DTS.Host, channelId, v.ZoneName, err))
@@ -526,7 +515,7 @@ func (a *App) SyncChannelZones(channelId byte) error {
 
 // SyncZones 同步获取所有防区
 func (a *App) SyncZones() {
-	for i := byte(1); i <= a.Config.ChannelNum; i++ {
+	for i := byte(1); i <= a.GetConfig().ChannelNum; i++ {
 		err := a.SyncChannelZones(i)
 		if err != nil {
 			a.setMessage(fmt.Sprintf("获取主机 %s 通道 %d 防区失败: %s", a.DTS.Host, i, err), logrus.ErrorLevel)
@@ -544,4 +533,36 @@ func (a *App) GetDeviceCode() (string, error) {
 		return "", errors.New(response.ErrMsg)
 	}
 	return response.GetDeviceID(), nil
+}
+
+// GetConfig 获取配置
+func (a *App) GetConfig() *Config {
+	a.locker.Lock()
+	defer a.locker.Unlock()
+	return a.config
+}
+
+// SetConfig 设置配置
+func (a *App) SetConfig(config *Config) {
+	a.locker.Lock()
+	defer a.locker.Unlock()
+	if config.ZonesAlarmSec <= 0 {
+		config.ZonesAlarmSec = 20
+	}
+	a.config.ZonesAlarmSec = config.ZonesAlarmSec
+
+	if config.ZonesTempSec <= 0 {
+		config.ZonesTempSec = 60
+	}
+	a.config.ZonesTempSec = config.ZonesTempSec
+
+	if config.ChanSignSec <= 0 {
+		config.ChanSignSec = 60
+	}
+	a.config.ChanSignSec = config.ChanSignSec
+
+	if config.ChannelNum == 0 {
+		config.ChannelNum = 4
+	}
+	a.config.ChannelNum = config.ChannelNum
 }
