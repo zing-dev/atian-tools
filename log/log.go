@@ -44,7 +44,7 @@ func Init() {
 			},
 		},
 		ReportCaller: true,
-		Level:        logrus.InfoLevel,
+		Level:        logrus.TraceLevel,
 		ExitFunc: func(i int) {
 			L.Warn(fmt.Sprintf("→→→→→→→→→→ this application is over by code %d ... ←←←←←←←←←←", i))
 			os.Exit(i)
@@ -52,21 +52,25 @@ func Init() {
 	}
 
 	filesMap := lfshook.WriterMap{}
-	for k, v := range map[string]logrus.Level{
-		"info":  logrus.InfoLevel,
-		"error": logrus.ErrorLevel,
-		"fatal": logrus.FatalLevel,
+	for k, v := range map[logrus.Level]string{
+		logrus.InfoLevel:  "info",
+		logrus.ErrorLevel: "error",
+		logrus.FatalLevel: "fatal",
 	} {
+
 		f, err := rotatelogs.New(
-			fmt.Sprintf("%s/%s/%s.log", Path, "%Y-%m-%d", k),
+			fmt.Sprintf("%s/%s/%s.log", Path, "%Y-%m-%d", v),
 			rotatelogs.WithMaxAge(maxAge),
 			rotatelogs.WithRotationTime(rotationTime),
 		)
 		if err != nil {
 			log.Fatal(err)
 		}
-		filesMap[v] = f
+		filesMap[k] = f
 	}
+
+	filesMap[logrus.TraceLevel] = filesMap[logrus.InfoLevel]
+	filesMap[logrus.DebugLevel] = filesMap[logrus.InfoLevel]
 
 	//文件日志
 	L.AddHook(lfshook.NewHook(filesMap, &logrus.TextFormatter{

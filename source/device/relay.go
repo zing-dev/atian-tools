@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/robfig/cron/v3"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -85,6 +87,19 @@ func (r *Relay) Reset(branch string) {
 	r.setStatus(Connected)
 }
 
+func (r *Relay) Alarms(branch string) {
+	for _, b := range strings.Split(branch, ",") {
+		i, err := strconv.Atoi(b)
+		if err != nil {
+			continue
+		}
+		if i <= 0 || i > 32 {
+			continue
+		}
+		go r.Alarm(b)
+	}
+}
+
 func (r *Relay) Alarm(branch string) {
 	host := fmt.Sprintf("%s/api/on/%s", r.URL, branch)
 	if r.ResetTime != "" {
@@ -127,9 +142,8 @@ func (r *Relay) Run() error {
 }
 
 func (r *Relay) Close() error {
-	r.locker.Lock()
-	defer r.locker.Unlock()
 	r.cancel()
 	r.Cron.Remove(r.CronId)
+	r.setStatus(UnConnect)
 	return nil
 }

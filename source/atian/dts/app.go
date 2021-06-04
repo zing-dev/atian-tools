@@ -249,7 +249,7 @@ START:
 						}
 
 						zones[index] = &Zone{
-							BaseZone: BaseZone{Id: id, ChannelId: z.ChannelId},
+							BaseZone: BaseZone{Id: id, ChannelId: z.ChannelId, Name: z.Name},
 							Temperature: &Temperature{
 								Max: zone.GetMaxTemperature(),
 								Avg: zone.GetAverageTemperature(),
@@ -266,10 +266,10 @@ START:
 					select {
 					case a.ChanZonesTemp <- ZonesTemp{
 						DTS:       a.DTS,
+						Zones:     zones,
 						Host:      a.DTS.Host,
 						DeviceId:  notify.GetDeviceID(),
 						CreatedAt: &device.TimeLocal{Time: time.Unix(notify.GetTimestamp()/1000, 0)},
-						Zones:     zones,
 					}:
 					default:
 						log.L.Warn(fmt.Sprintf("主机 %s 温度更新防区缓冲已满,忽略当前更新...", a.DTS.Host))

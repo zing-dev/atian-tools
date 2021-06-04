@@ -168,10 +168,10 @@ func (x *Store) Write() {
 		}, func(p1, p2 *dts.Zone) bool {
 			return p1.Id < p2.Id
 		}).Sort(zones)
-		for _, zone := range zones.ChannelZones() {
-			if len(zone) > 1 {
-				log.L.Info(fmt.Sprintf("开始保存通道通道 %d 温度", zone[0].ChannelId))
-				x.write(fmt.Sprintf("通道 %d ", zone[0].ChannelId), zone)
+		for _, list := range zones.ChannelZones() {
+			if len(list) > 1 {
+				log.L.Info(fmt.Sprintf("开始保存设备 %s 通道 %d 温度,防区数量 %d", x.Config.Host, list[0].ChannelId, len(list)))
+				x.write(fmt.Sprintf("通道 %d ", list[0].ChannelId), list)
 			}
 		}
 		x.Save()
