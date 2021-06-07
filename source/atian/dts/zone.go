@@ -1,7 +1,6 @@
 package dts
 
 import (
-	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,38 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
-
-func (t TimeLocal) MarshalJSON() ([]byte, error) {
-	return []byte(t.Format(`"2006-01-02 15:04:05"`)), nil
-}
-
-func (t *TimeLocal) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" {
-		return nil
-	}
-	var err error
-	t.Time, err = time.Parse(`"`+"2006-01-02 15:04:05"+`"`, string(data))
-	return err
-}
-
-func (t TimeLocal) Value() (driver.Value, error) {
-	var zeroTime time.Time
-	if t.Time.UnixNano() == zeroTime.UnixNano() {
-		return nil, nil
-	}
-	return t.Time, nil
-}
-
-func (t *TimeLocal) Scan(v interface{}) error {
-	value, ok := v.(time.Time)
-	if ok {
-		*t = TimeLocal{Time: value}
-		return nil
-	}
-	return fmt.Errorf("can not convert %v to timestamp", v)
-}
 
 // DecodeTags 解析标签
 func DecodeTags(tag string) (res map[string]string) {
@@ -156,31 +124,7 @@ func GetEventTypeString(t model.FiberState) string {
 	}
 }
 
-// Deprecated
-func (s *Status) String() string {
-	switch *s {
-	case StatusOnline:
-		return "在线"
-	case StatusOff:
-		return "离线"
-	case StatusRetry:
-		return "重连"
-	}
-	return "未知状态"
-}
-
 const (
-	_ Status = iota
-	// StatusOnline
-	// Deprecated
-	StatusOnline
-	// StatusOff
-	// Deprecated
-	StatusOff
-	// StatusRetry
-	// Deprecated
-	StatusRetry
-
 	// TagSeparator 标签分隔符
 	TagSeparator = ";"
 	// TagValueSeparator 标签名和值分隔符
@@ -201,22 +145,12 @@ const (
 )
 
 type (
-	// Status
-	// Deprecated
-	Status byte
-
-	// TimeLocal 本地时间常量
-	// Deprecated
-	TimeLocal struct {
-		time.Time
-	}
-
 	// Tag 标签 形如 k1=v1;k2=v2
-	// 标签 warehouse=w1;group=g1;row=1;column=1;layer=1;relay=A1,2,3,4,5
-	// Map {warehouse:w1,group:g1,row:1,column:1,layer:1,relay:A1,2,3,4,5}
+	// 标签 warehouse=w1;group=g1;row=1;column=1;layer=1;relay=A1,2,3,4,5|
+	// Map {warehouse:w1,group:g1,row:1,column:1,layer:1,relay:{A:'1,2,3,4,5',B:'1,2,3,4'}}
 	Tag map[string]string
 	// Relay 继电器
-	Relay map[uint8]string //标签 relay=A1,2,3,4,5 Map {A:1,2,3,4,5}
+	Relay map[uint8]string //标签 relay=A1,2,3,4,5|B1,2,3 Map {A:'1,2,3,4,5',B:'1,2,3,4'}
 
 	// Temperature 温度信息
 	Temperature struct {
@@ -456,6 +390,7 @@ type D3 struct {
 
 // NewRelay 解析继电器标签
 func NewRelay(tag map[string]string) (Relay, error) {
+	relay := make(Relay)
 	for _, t := range strings.Split(TagRelay, "|") {
 		if r, ok := tag[t]; !ok {
 			continue
@@ -463,14 +398,17 @@ func NewRelay(tag map[string]string) (Relay, error) {
 			return nil, errors.New("继电器标签字符值至少两位,例如A1")
 		} else if ok, _ := regexp.MatchString("^([1-9]*[1-9][0-9]*_)+[1-9]*[1-9][0-9]*$", r[1:]); ok {
 			//兼容这种形式 A1_2_3_4
-			return Relay{r[0]: strings.ReplaceAll(r[1:], "_", ",")}, nil
+			relay[r[0]] = strings.ReplaceAll(r[1:], "_", ",")
 		} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
 			return nil, errors.New(fmt.Sprintf("继电器标签模式不匹配: %s, 必须如A1,2,3,4", err))
 		} else {
-			return Relay{r[0]: r[1:]}, nil
+			relay[r[0]] = r[1:]
 		}
 	}
-	return nil, errors.New("继电器标签不存在")
+	if len(relay) == 0 {
+		return nil, errors.New("继电器标签不存在")
+	}
+	return relay, nil
 }
 
 // NewCoordinate 解析防区空间坐标
