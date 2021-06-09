@@ -124,7 +124,7 @@ func (a *App) Register() (err error) {
 START:
 	for err != nil {
 		if time.Now().Sub(start) > time.Minute {
-			a.setMessage(fmt.Sprintf("主机为 %s 的dts 回调数据失败", a.DTS.Host), logrus.ErrorLevel)
+			a.setMessage(fmt.Sprintf("主机为 %s 的 dts 回调数据失败", a.DTS.Host), logrus.ErrorLevel)
 			break
 		}
 		for _, t := range a.CallTypes {
@@ -202,14 +202,14 @@ START:
 					}
 				})
 				if err != nil {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts注册报警回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
+					a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册报警回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
 					time.Sleep(time.Second * 3)
 					break START
 				} else {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts注册报警回调", a.DTS.Host), logrus.InfoLevel)
+					a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册报警回调", a.DTS.Host), logrus.InfoLevel)
 				}
 			case CallTemp:
-				a.setMessage(fmt.Sprintf("主机为 %s 的dts 注册温度更新回调", a.DTS.Host), logrus.InfoLevel)
+				a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册温度更新回调", a.DTS.Host), logrus.InfoLevel)
 				a.ChanZonesTemp = make(chan ZonesTemp, 30)
 				err = a.Client.CallZoneTempNotify(func(notify *model.ZoneTempNotify, err error) {
 
@@ -264,13 +264,13 @@ START:
 					}
 				})
 				if err != nil {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts注册实时温度更新回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
+					a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册实时温度更新回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
 					break START
 				} else {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts注册实时温度更新回调", a.DTS.Host), logrus.InfoLevel)
+					a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册实时温度更新回调", a.DTS.Host), logrus.InfoLevel)
 				}
 			case CallSignal:
-				a.setMessage(fmt.Sprintf("主机为 %s 的dts 注册通道信号回调", a.DTS.Host), logrus.InfoLevel)
+				a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册通道信号回调", a.DTS.Host), logrus.InfoLevel)
 				a.ChanChannelSignal = make(chan ChannelSignal, 30)
 				err = a.Client.CallTempSignalNotify(func(notify *model.TempSignalNotify, err error) {
 					value, ok := a.ZonesChannelSignal.LoadOrStore(fmt.Sprintf("%s-%d", notify.GetDeviceID(), notify.ChannelID), notify)
@@ -308,11 +308,11 @@ START:
 					}
 				})
 				if err != nil {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts注册信号回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
+					a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册信号回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
 					break START
 				}
 			case CallEvent:
-				a.setMessage(fmt.Sprintf("主机为 %s 的dts 注册通道光纤事件回调", a.DTS.Host), logrus.InfoLevel)
+				a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册通道光纤事件回调", a.DTS.Host), logrus.InfoLevel)
 				a.ChanChannelEvent = make(chan ChannelEvent, 10)
 				err = a.Client.CallDeviceEventNotify(func(notify *model.DeviceEventNotify, err error) {
 					event := ChannelEvent{
@@ -330,7 +330,7 @@ START:
 					}
 				})
 				if err != nil {
-					a.setMessage(fmt.Sprintf("主机为 %s 的dts注册信号回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
+					a.setMessage(fmt.Sprintf("主机为 %s 的 dts 注册信号回调失败: %s", a.DTS.Host, err), logrus.ErrorLevel)
 					break START
 				}
 			}

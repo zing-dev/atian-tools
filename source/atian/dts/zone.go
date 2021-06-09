@@ -268,6 +268,21 @@ type (
 	}
 )
 
+func (e *ChannelEvent) JSON() string {
+	data, _ := json.Marshal(e)
+	return string(data)
+}
+
+func (s *ChannelSignal) JSON() string {
+	data, _ := json.Marshal(s)
+	return string(data)
+}
+
+func (a *ZonesAlarm) JSON() string {
+	data, _ := json.Marshal(a)
+	return string(data)
+}
+
 func (ms *multiSorter) Sort(zones SortZones) {
 	ms.zones = zones
 	sort.Sort(ms)

@@ -9,7 +9,9 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/zing-dev/atian-tools/log"
 	"github.com/zing-dev/atian-tools/source/atian/dts"
+	"github.com/zing-dev/atian-tools/source/device"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -201,6 +203,32 @@ func (x *Store) Run() {
 		}
 		x.CronIds[id2] = struct{}{}
 	}
+	//每日12点执行一次
+	id3, err := x.Cron.AddFunc("0 0 12 * * *", func() {
+		dir := fmt.Sprintf("%s/%s", x.Config.Dir, x.Config.Host)
+		last := time.Now().AddDate(-1, 0, 0).Format(device.LocalDateFormat)
+		dirs, err := os.ReadDir(dir)
+		if err != nil {
+			return
+		}
+		for _, entry := range dirs {
+			if strings.HasPrefix(entry.Name(), last) {
+				name := fmt.Sprintf("%s/%s", dir, entry.Name())
+				err := os.Remove(name)
+				if err != nil {
+					log.L.Error(fmt.Sprintf("删除设备 %s 历史文件 %s 失败: %s", x.Config.Host, name, err))
+				} else {
+					log.L.Info(fmt.Sprintf("删除设备 %s 历史文件 %s", x.Config.Host, name))
+				}
+			}
+		}
+	})
+
+	if err != nil {
+		return
+	}
+	x.CronIds[id3] = struct{}{}
+
 	x.Cron.Start()
 	log.L.Info("定时器开始后台运行...")
 }
