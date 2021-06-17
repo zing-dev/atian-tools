@@ -68,7 +68,7 @@ type App struct {
 func (app *App) run() {
 	for i, ip := range app.config.DTSIp {
 		go func(i int, ip string) {
-			a := dts.New(app.ctx, dts.DTS{Id: uint(i + 1), Name: ip, Host: ip}, dts.Config{ChannelNum: 4})
+			a := dts.New(app.ctx, dts.DTS{Id: uint(i + 1), Name: ip, Host: ip}, &dts.Config{ChannelNum: 4})
 			a.CallTypes = []dts.CallType{dts.CallAlarm}
 			go func() {
 				for {

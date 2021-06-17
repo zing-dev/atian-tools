@@ -43,7 +43,7 @@ func main() {
 	for _, d := range core.DTS {
 		d := d
 		go func(d dts.DTS) {
-			app := dts.New(core.ctx, d, core.config)
+			app := dts.New(core.ctx, d, &core.config)
 			app.Cron = cron.New(cron.WithSeconds())
 			core.locker.Lock()
 			core.apps[d.Host] = app

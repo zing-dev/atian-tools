@@ -7,6 +7,7 @@ import (
 	"github.com/zing-dev/atian-tools/protocol/tcp/haosen"
 	"github.com/zing-dev/atian-tools/source/atian/dts"
 	"github.com/zing-dev/atian-tools/source/device"
+	"time"
 )
 
 type App struct {
@@ -28,10 +29,14 @@ func NewApp() *App {
 	}
 }
 func (a *App) Run() {
-	a.client = haosen.NewClient(a.ctx, "192.168.0.251:9090")
-	err := a.client.Connect()
-	if err != nil {
-		log.L.Fatal(err)
+	a.client = haosen.NewClient(a.ctx, a.config.ServerHost)
+	for {
+		err := a.client.Connect()
+		if err == nil {
+			break
+		}
+		log.L.Fatal(fmt.Sprintf("连接服务器 %s 失败: %s", a.config.ServerHost, err))
+		time.Sleep(time.Second)
 	}
 	a.manger = device.NewManger(a.ctx)
 	a.manger.Register(device.EventAdd, func(d device.Device) {
@@ -42,7 +47,7 @@ func (a *App) Run() {
 				for {
 					select {
 					case <-app.Context.Done():
-						log.L.Warn("over")
+						return
 					case status := <-app.ChanStatus:
 						if status == device.Connected {
 							log.L.Info("获取防区开始")
@@ -53,20 +58,18 @@ func (a *App) Run() {
 								log.L.Error("register ", err)
 							}
 						}
-						log.L.Info("status", status)
 					case alarm := <-app.ChanZonesAlarm:
-						log.L.Info("alarm ", alarm.DeviceId)
 						zones := make([]haosen.Alarm, len(alarm.Zones))
 						var i = 0
 						for _, zone := range alarm.Zones {
 							if zone.Coordinate == nil {
-								log.L.Error(fmt.Sprintf("报警防区 %s 无有效的坐标", zone.Name))
+								log.L.Error(fmt.Sprintf("设备 %s 报警防区 %s 无有效的坐标", app.DTS.Host, zone.Name))
 								continue
 							}
 							zones[i] = haosen.Alarm{
 								Zone: haosen.Zone{
 									ZoneId:      zone.Name,
-									Line:        "1111",
+									Line:        zone.Coordinate.Group,
 									X:           int(zone.Coordinate.Row),
 									Y:           int(zone.Coordinate.Column),
 									Z:           int(zone.Coordinate.Layer),
@@ -85,20 +88,17 @@ func (a *App) Run() {
 							GUID:      alarm.CreatedAt.Format(haosen.GUIDFormat),
 							DeviceId:  alarm.DeviceId,
 							TimeStamp: alarm.CreatedAt.Format(haosen.LocalTimeFormat),
-							Alarms: haosen.Alarms{
-								Count:  len(zones),
-								Alarms: zones,
-							},
+							Alarms:    haosen.Alarms{Count: len(zones), Alarms: zones},
 						}
 						response, err := a.client.Send(haosen.MsgAlarm, request)
 						if err != nil {
-							log.L.Error(err)
+							log.L.Error(fmt.Sprintf("设备 %s 报警失败: %s", app.DTS.Host, err))
 						} else {
-							log.L.Info(response.ErrorCode, response.ErrorMsg)
+							log.L.Info(fmt.Sprintf("设备 %s 报警返回码: %s 信息: %s", app.DTS.Host, response.ErrorCode, response.ErrorMsg))
 						}
 
 					case event := <-app.ChanChannelEvent:
-						log.L.Info("event ", event.DeviceId)
+						log.L.Info("event...", event.DeviceId)
 						request := haosen.EventRequest{
 							CMD:       haosen.CMDAlarm,
 							GUID:      event.CreatedAt.Format(haosen.GUIDFormat),
@@ -108,13 +108,11 @@ func (a *App) Run() {
 						}
 						response, err := a.client.Send(haosen.MsgEvent, request)
 						if err != nil {
-							log.L.Error(err)
+							log.L.Error(fmt.Sprintf("设备 %s 故障报警失败: %s", app.DTS.Host, err))
 						} else {
-							log.L.Info(response.ErrorCode, response.ErrorMsg)
+							log.L.Info(fmt.Sprintf("设备 %s 故障报警返回码: %s 信息: %s", app.DTS.Host, response.ErrorCode, response.ErrorMsg))
 						}
-
 					case temp := <-app.ChanZonesTemp:
-						log.L.Info("temp ", temp.DeviceId)
 						datas := make([]haosen.Data, len(temp.Zones))
 						var i = 0
 						for _, zone := range temp.Zones {
@@ -125,7 +123,7 @@ func (a *App) Run() {
 							datas[i] = haosen.Data{
 								Zone: haosen.Zone{
 									ZoneId:      zone.Name,
-									Line:        "1111",
+									Line:        zone.Coordinate.Group,
 									X:           int(zone.Coordinate.Row),
 									Y:           int(zone.Coordinate.Column),
 									Z:           int(zone.Coordinate.Layer),
@@ -150,9 +148,9 @@ func (a *App) Run() {
 						}
 						response, err := a.client.Send(haosen.MsgRealTimeTemp, request)
 						if err != nil {
-							log.L.Error(err)
+							log.L.Error(fmt.Sprintf("设备 %s 上传实时温度失败: %s", app.DTS.Host, err))
 						} else {
-							log.L.Info(response.ErrorCode, response.ErrorMsg)
+							log.L.Info(fmt.Sprintf("设备 %s 上传实时温度返回码: %s 信息: %s", app.DTS.Host, response.ErrorCode, response.ErrorMsg))
 						}
 					}
 				}
@@ -160,7 +158,7 @@ func (a *App) Run() {
 		}
 	})
 	for k, v := range a.config.DTSIp {
-		a.manger.Add(dts.New(a.manger.Context, dts.DTS{Id: uint(k + 1), Host: v}, dts.Config{ChannelNum: 4, Coordinate: true}))
+		a.manger.Add(dts.New(a.manger.Context, dts.DTS{Id: uint(k + 1), Host: v}, &dts.Config{ChannelNum: 4, Coordinate: true}))
 	}
 
 	a.manger.Range(func(s string, d device.Device) {

@@ -7,8 +7,6 @@ import (
 	"github.com/aceld/zinx/zlog"
 	"github.com/aceld/zinx/znet"
 	"github.com/zing-dev/atian-tools/log"
-	"golang.org/x/text/encoding/unicode"
-	"golang.org/x/text/transform"
 	"time"
 )
 
@@ -29,15 +27,15 @@ const (
 	LocalTimeFormat = "2006-01-02 15:04:05"
 )
 
-func DecodeUTF16(b []byte) ([]byte, error) {
-	r, _, err := transform.Bytes(unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder(), b)
-	return r, err
-}
-
-func EncodeUTF16(b []byte) ([]byte, error) {
-	r, _, err := transform.Bytes(unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewEncoder(), b)
-	return r, err
-}
+//func DecodeUTF16(b []byte) ([]byte, error) {
+//	r, _, err := transform.Bytes(unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewDecoder(), b)
+//	return r, err
+//}
+//
+//func EncodeUTF16(b []byte) ([]byte, error) {
+//	r, _, err := transform.Bytes(unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM).NewEncoder(), b)
+//	return r, err
+//}
 
 type Response struct {
 	XMLName   xml.Name `xml:"Setting"`
@@ -136,11 +134,7 @@ func (r *AlarmRouter) Handle(request ziface.IRequest) {
 			TimeStamp: time.Now().Format(LocalTimeFormat),
 		}
 	)
-	data, err := DecodeUTF16(request.GetData())
-	if err != nil {
-		log.L.Error(err)
-	}
-	err = xml.Unmarshal(data, alarm)
+	err := xml.Unmarshal(request.GetData(), alarm)
 	if err != nil {
 		response.ErrorCode = "1"
 		response.ErrorMsg = fmt.Sprintf("解析上传数据异常: %s", err)
@@ -150,15 +144,12 @@ func (r *AlarmRouter) Handle(request ziface.IRequest) {
 		response.ErrorMsg = "ok"
 		response.DeviceId = alarm.DeviceId
 	}
-	data, err = xml.Marshal(response)
+	data, err := xml.Marshal(response)
 	if err != nil {
 		log.L.Error("Marshal ", err)
 		return
 	}
-	data, err = EncodeUTF16(append([]byte(Header), data...))
-	if err != nil {
-		log.L.Error(err)
-	}
+	data = append([]byte(Header), data...)
 	err = request.GetConnection().SendBuffMsg(MsgAlarm, data)
 	if err != nil {
 		zlog.Error(err)
@@ -181,11 +172,7 @@ func (r *EventRouter) Handle(request ziface.IRequest) {
 			TimeStamp: time.Now().Format(LocalTimeFormat),
 		}
 	)
-	data, err := DecodeUTF16(request.GetData())
-	if err != nil {
-		log.L.Error(err)
-	}
-	err = xml.Unmarshal(data, event)
+	err := xml.Unmarshal(request.GetData(), event)
 	if err != nil {
 		response.ErrorCode = "1"
 		response.ErrorMsg = fmt.Sprintf("解析上传数据异常: %s", err)
@@ -195,15 +182,12 @@ func (r *EventRouter) Handle(request ziface.IRequest) {
 		response.ErrorMsg = "ok"
 		response.DeviceId = event.DeviceId
 	}
-	data, err = xml.Marshal(response)
+	data, err := xml.Marshal(response)
 	if err != nil {
 		log.L.Error("Marshal ", err)
 		return
 	}
-	data, err = EncodeUTF16(append([]byte(Header), data...))
-	if err != nil {
-		log.L.Error(err)
-	}
+	data = append([]byte(Header), data...)
 	err = request.GetConnection().SendBuffMsg(MsgEvent, data)
 	if err != nil {
 		zlog.Error(err)
@@ -226,11 +210,7 @@ func (r *ConfigRouter) Handle(request ziface.IRequest) {
 			TimeStamp: time.Now().Format(LocalTimeFormat),
 		}
 	)
-	data, err := DecodeUTF16(request.GetData())
-	if err != nil {
-		log.L.Error(err)
-	}
-	err = xml.Unmarshal(data, config)
+	err := xml.Unmarshal(request.GetData(), config)
 	if err != nil {
 		response.ErrorCode = "1"
 		response.ErrorMsg = fmt.Sprintf("解析上传数据异常: %s", err)
@@ -240,15 +220,12 @@ func (r *ConfigRouter) Handle(request ziface.IRequest) {
 		response.ErrorMsg = "ok"
 		response.DeviceId = config.DeviceId
 	}
-	data, err = xml.Marshal(response)
+	data, err := xml.Marshal(response)
 	if err != nil {
 		log.L.Error("Marshal ", err)
 		return
 	}
-	data, err = EncodeUTF16(append([]byte(Header), data...))
-	if err != nil {
-		log.L.Error(err)
-	}
+	data = append([]byte(Header), data...)
 	err = request.GetConnection().SendBuffMsg(MsgConfig, data)
 	if err != nil {
 		zlog.Error(err)
@@ -260,7 +237,7 @@ type RealTimeTempRouter struct {
 	znet.BaseRouter
 }
 
-// Handle  Handle
+// Handle 温度处理
 func (r *RealTimeTempRouter) Handle(request ziface.IRequest) {
 	zlog.Debug("Call RealtimeTempRouter Handle")
 	var (
@@ -272,11 +249,7 @@ func (r *RealTimeTempRouter) Handle(request ziface.IRequest) {
 		}
 	)
 
-	data, err := DecodeUTF16(request.GetData())
-	if err != nil {
-		log.L.Error(err)
-	}
-	err = xml.Unmarshal(data, temp)
+	err := xml.Unmarshal(request.GetData(), temp)
 	if err != nil {
 		response.ErrorCode = "1"
 		response.ErrorMsg = fmt.Sprintf("解析上传数据异常: %s", err)
@@ -286,15 +259,12 @@ func (r *RealTimeTempRouter) Handle(request ziface.IRequest) {
 		response.ErrorMsg = "ok"
 		response.DeviceId = temp.DeviceId
 	}
-	data, err = xml.Marshal(response)
+	data, err := xml.Marshal(response)
 	if err != nil {
 		log.L.Error("Marshal ", err)
 		return
 	}
-	data, err = EncodeUTF16(append([]byte(Header), data...))
-	if err != nil {
-		log.L.Error(err)
-	}
+	data = append([]byte(Header), data...)
 	err = request.GetConnection().SendBuffMsg(MsgRealTimeTemp, data)
 	if err != nil {
 		zlog.Error(err)
