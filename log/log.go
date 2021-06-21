@@ -59,7 +59,7 @@ func Init() {
 	} {
 
 		f, err := rotatelogs.New(
-			fmt.Sprintf("%s/%s/%s.log", Path, "%Y-%m-%d", v),
+			fmt.Sprintf("%s/%s-%s.log", Path, "%Y-%m-%d", v),
 			rotatelogs.WithMaxAge(maxAge),
 			rotatelogs.WithRotationTime(rotationTime),
 		)

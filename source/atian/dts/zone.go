@@ -181,10 +181,9 @@ type (
 
 	// DTS 当前dts主机的信息
 	DTS struct {
-		Id       uint   `json:"id"`
-		Name     string `json:"name"`
-		Host     string `json:"host"`
-		OfficeId string `json:"office_id,omitempty"`
+		Id   uint   `json:"id"`
+		Name string `json:"name"`
+		Host string `json:"host"`
 	}
 
 	// Zone 防区信息
@@ -414,10 +413,12 @@ func NewRelay(tag map[string]string) (Relay, error) {
 		} else if ok, _ := regexp.MatchString("^([1-9]*[1-9][0-9]*_)+[1-9]*[1-9][0-9]*$", r[1:]); ok {
 			//兼容这种形式 A1_2_3_4
 			relay[r[0]] = strings.ReplaceAll(r[1:], "_", ",")
+			break
 		} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
 			return nil, errors.New(fmt.Sprintf("继电器标签模式不匹配: %s, 必须如A1,2,3,4", err))
 		} else {
 			relay[r[0]] = r[1:]
+			break
 		}
 	}
 	if len(relay) == 0 {

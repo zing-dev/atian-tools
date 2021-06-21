@@ -35,9 +35,10 @@ type Request struct {
 }
 
 type Response struct {
-	Code Type        `json:"code,omitempty"`
-	Msg  string      `json:"msg,omitempty"`
-	Data interface{} `json:"data,omitempty"`
+	Code   Type        `json:"code,omitempty"`
+	Status bool        `json:"status"`
+	Msg    string      `json:"msg,omitempty"`
+	Data   interface{} `json:"data,omitempty"`
 }
 
 func (r Request) JSON() []byte {
