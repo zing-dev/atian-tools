@@ -171,6 +171,8 @@ func (m *Manger) Devices() []Device {
 
 // GetStatus 获取设备的状态
 func (m *Manger) GetStatus() []Status {
+	m.locker.Lock()
+	defer m.locker.Unlock()
 	status := make([]Status, m.Length())
 	i := 0
 	m.devices.Range(func(key, value interface{}) bool {

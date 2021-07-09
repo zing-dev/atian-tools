@@ -414,15 +414,13 @@ func NewRelay(tag map[string]string) (Relay, error) {
 			//兼容这种形式 A1_2_3_4
 			relay[r[0]] = strings.ReplaceAll(r[1:], "_", ",")
 			break
-		} else if ok, err := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); !ok {
-			return nil, errors.New(fmt.Sprintf("继电器标签模式不匹配: %s, 必须如A1,2,3,4", err))
-		} else {
+		} else if ok, _ := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", r[1:]); ok {
 			relay[r[0]] = r[1:]
 			break
 		}
 	}
 	if len(relay) == 0 {
-		return nil, errors.New("继电器标签不存在")
+		return nil, errors.New("继电器标签模式不匹配,必须如A1,2,3,4")
 	}
 	return relay, nil
 }

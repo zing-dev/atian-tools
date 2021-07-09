@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	maxAge       = 30 * time.Hour * 24
+	maxAge       = 30 * 6 * time.Hour * 24
 	rotationTime = time.Hour * 24
 	timeFormat   = "2006-01-02 15:04:05"
 )
@@ -71,6 +71,7 @@ func Init() {
 
 	filesMap[logrus.TraceLevel] = filesMap[logrus.InfoLevel]
 	filesMap[logrus.DebugLevel] = filesMap[logrus.InfoLevel]
+	filesMap[logrus.WarnLevel] = filesMap[logrus.InfoLevel]
 
 	//文件日志
 	L.AddHook(lfshook.NewHook(filesMap, &logrus.TextFormatter{
