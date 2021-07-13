@@ -3,7 +3,7 @@ module github.com/zing-dev/atian-tools
 go 1.16
 
 require (
-	github.com/360EntSecGroup-Skylar/excelize v1.4.1
+	github.com/360EntSecGroup-Skylar/excelize/v2 v2.4.0
 	github.com/Atian-OE/DTSSDK_Golang v0.1.6
 	github.com/aceld/zinx v1.0.0
 	github.com/aliyun/alibaba-cloud-sdk-go v1.61.1117
@@ -23,5 +23,4 @@ require (
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	go.bug.st/serial v1.1.3
 	gopkg.in/ini.v1 v1.62.0
-	gopkg.in/yaml.v2 v2.2.8 // indirect
 )

@@ -3,7 +3,7 @@ package beida_bluebird
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/360EntSecGroup-Skylar/excelize"
+	"github.com/360EntSecGroup-Skylar/excelize/v2"
 	"github.com/zing-dev/atian-tools/log"
 	"strconv"
 	"strings"
@@ -51,7 +51,7 @@ func (m Maps) Load(filename string) {
 		log.L.Fatal("打开XLSX失败: ", err)
 		return
 	}
-	rows := file.GetRows(file.GetSheetName(file.GetActiveSheetIndex()))
+	rows, _ := file.GetRows(file.GetSheetName(file.GetActiveSheetIndex()))
 	if len(rows) < 4 {
 		log.L.Fatal("XLSX最少四行数据")
 		return

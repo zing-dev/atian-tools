@@ -55,8 +55,8 @@ func main() {
 	})
 
 	devices := []device.Device{
-		dts.New(manger.Context, dts.DTS{Id: 1, Name: "1", Host: "192.168.0.215"}, dts.Config{ChannelNum: 4, ZonesTempSec: 10}),
-		dts.New(manger.Context, dts.DTS{Id: 2, Name: "2", Host: "192.168.0.86"}, dts.Config{ChannelNum: 4, ZonesTempSec: 10}),
+		dts.New(manger.Context, dts.DTS{Id: 1, Name: "1", Host: "192.168.0.215"}, &dts.Config{ChannelNum: 4, ZonesTempSec: 10}),
+		dts.New(manger.Context, dts.DTS{Id: 2, Name: "2", Host: "192.168.0.86"}, &dts.Config{ChannelNum: 4, ZonesTempSec: 10}),
 	}
 	manger.Adds(devices...)
 	manger.Range(func(s string, d device.Device) {

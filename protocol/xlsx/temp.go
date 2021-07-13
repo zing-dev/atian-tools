@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/360EntSecGroup-Skylar/excelize"
+	"github.com/360EntSecGroup-Skylar/excelize/v2"
 	"github.com/robfig/cron/v3"
 	"github.com/zing-dev/atian-tools/log"
 	"github.com/zing-dev/atian-tools/source/atian/dts"
@@ -119,7 +119,7 @@ func (x *Store) write(channel string, sortZones dts.SortZones) {
 		x.file.SetCellValue(channel, fmt.Sprintf("%s%d", column, 1), time.Now().Format(LocalTimeFormat))
 		x.file.SetColWidth(channel, column, column, 20)
 		for k, v := range sortZones {
-			if x.file.GetCellValue(channel, fmt.Sprintf("A%d", k+2)) == v.Name {
+			if val, _ := x.file.GetCellValue(channel, fmt.Sprintf("A%d", k+2)); val == v.Name {
 				x.file.SetCellValue(channel, fmt.Sprintf("%s%d", column, k+2), v.Temperature.Avg)
 			}
 		}

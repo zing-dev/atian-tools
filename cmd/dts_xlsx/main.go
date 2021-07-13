@@ -16,13 +16,20 @@ func main() {
 	host := "192.168.0.86"
 	store := xlsx.New(ctx, xlsx.Config{
 		Host:          host,
-		Dir:           "./xlsx",
+		Dir:           "./xlsx/temp",
 		MinTempMinute: 1,
 		MinSaveHour:   6,
 	})
-	app := dts.New(ctx, dts.DTS{Id: 1, Host: host}, dts.Config{ChannelNum: 4, ZonesTempSec: 6})
+	signalStore := xlsx.NewSignalStore(&xlsx.Config{
+		Host:          host,
+		Dir:           "./xlsx/signal",
+		MinTempMinute: 1,
+		MinSaveHour:   6,
+	})
+
+	app := dts.New(ctx, dts.DTS{Id: 1, Host: host}, &dts.Config{ChannelNum: 4, ZonesTempSec: 6})
 	time.AfterFunc(time.Hour*240, cancel)
-	app.CallTypes = []dts.CallType{dts.CallTemp}
+	app.CallTypes = []dts.CallType{dts.CallTemp, dts.CallSignal}
 	err := app.Run()
 	if err != nil {
 		log.L.Fatal(err)
@@ -47,6 +54,9 @@ func main() {
 		case temp := <-app.ChanZonesTemp:
 			log.L.Info("temp", temp.DeviceId)
 			store.Store(temp)
+		case data := <-app.ChanChannelSignal:
+			log.L.Info("signal:", data.DeviceId)
+			signalStore.Store(data)
 		}
 	}
 }
