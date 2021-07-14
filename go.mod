@@ -9,7 +9,7 @@ require (
 	github.com/aliyun/alibaba-cloud-sdk-go v1.61.1117
 	github.com/eclipse/paho.mqtt.golang v1.3.4
 	github.com/gorilla/websocket v1.4.2
-	github.com/hooklift/gowsdl v0.4.0
+	github.com/hooklift/gowsdl v0.5.0
 	github.com/iris-contrib/go.uuid v2.0.0+incompatible
 	github.com/jonboulle/clockwork v0.2.2 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect

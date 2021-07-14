@@ -6,7 +6,7 @@ import (
 	"github.com/hooklift/gowsdl/soap"
 	"github.com/zing-dev/atian-tools/cfg"
 	"github.com/zing-dev/atian-tools/log"
-	"github.com/zing-dev/atian-tools/protocol/soap/q5"
+	"github.com/zing-dev/atian-tools/protocol/soap/wms"
 	"github.com/zing-dev/atian-tools/source/beida_bluebird"
 	"net/url"
 	"os"
@@ -74,7 +74,7 @@ type App struct {
 	cancel context.CancelFunc
 
 	config  *Config
-	service q5.IDtsWcfService
+	service wms.I_ErpService
 }
 
 func main() {
@@ -87,7 +87,7 @@ func main() {
 		config: newConfig(),
 	}
 
-	app.service = q5.NewIDtsWcfService(soap.NewClient(app.config.WebServiceUrl, soap.WithTimeout(time.Second*3)))
+	app.service = wms.NewI_ErpService(soap.NewClient(app.config.WebServiceUrl, soap.WithTimeout(time.Second*3)))
 	sensation := beida_bluebird.New(app.ctx, &beida_bluebird.Config{Port: app.config.SerialPort, MapFile: app.config.MapFile})
 	go sensation.Run()
 	for {
@@ -99,7 +99,7 @@ func main() {
 			if app.config.Debug {
 				log.L.Info(protocol)
 			}
-			if protocol.IsCmdAlarm() {
+			if protocol.IsCmdAlarm() || protocol.IsCmdFailure() {
 				log.L.Warn("产生了一个新的报警信息...")
 			}
 			if protocol.IsTypeSmokeSensation() || protocol.PartType == beida_bluebird.PartTypeManual {
@@ -119,41 +119,19 @@ func main() {
 					names += fmt.Sprintf("%s, ", zone.Name)
 				}
 				log.L.Warn(names)
-				for _, item := range list {
-					if protocol.IsCmdFailure() {
-						response, err := app.service.DeviceWarn(&q5.DeviceWarn{
-							LocCode:     item.Code,
-							WarnContext: item.Code,
+				if protocol.IsCmdAlarm() || protocol.IsCmdFailure() {
+					for _, item := range list {
+						response, err := app.service.GetFireCellCode(&wms.GetFireCellCode{
+							StrCellCode: &item.Code,
 						})
 						if err != nil {
-							log.L.Error("故障报警失败: ", err)
+							log.L.Error("发送失败：", err)
 							continue
 						}
-
-						if !response.DeviceWarnResult {
-							log.L.Error("故障报警返回信息: ", response.Msg)
-							continue
-						}
-						if response.DeviceWarnResult {
-							log.L.Info("故障报警返回信息: ", response.Msg)
-						}
-					}
-
-					if protocol.IsCmdAlarm() {
-						response, err := app.service.FireWarn(&q5.FireWarn{
-							LocCode:     item.Code,
-							WarnContext: item.Code,
-						})
-						if err != nil {
-							log.L.Error("烟感报警失败: ", err)
-							continue
-						}
-						if !response.FireWarnResult {
-							log.L.Error("烟感报警返回信息: ", response.Msg)
-							continue
-						}
-						if response.FireWarnResult {
-							log.L.Info("烟感报警返回信息: ", response.Msg)
+						if response.GetFireCellCodeResult {
+							log.L.Info("返回信息：", *response.SResult)
+						} else {
+							log.L.Error("发送失败，返回信息：", *response.SResult)
 						}
 					}
 				}
