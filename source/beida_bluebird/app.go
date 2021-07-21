@@ -54,6 +54,7 @@ type App struct {
 }
 
 type Config struct {
+	Debug   bool
 	Port    string
 	MapFile string
 }
@@ -203,6 +204,9 @@ func (a *App) read() {
 			return
 		default:
 			n, err := a.Serial.Read(buffer)
+			if a.config.Debug {
+				log.L.Info(fmt.Sprintf("raw: %x", buffer[:n]))
+			}
 			a.handle(buffer[:n])
 			if err != nil {
 				log.L.Error("read from serial err: ", err)
@@ -216,10 +220,18 @@ func (a *App) read() {
 func (a *App) handle(data []byte) {
 	a.cache.Write(data)
 	d26 := [DataLength]byte{}
-	data = make([]byte, DataLength)
+	data = make([]byte, DataLength-1)
 	for a.cache.Len() >= DataLength {
+		head, err := a.cache.ReadByte()
+		if err != nil {
+			continue
+		}
+		if head != CodeStart {
+			log.L.Error("the first byte is not 0x82 -> ", head)
+			continue
+		}
 		n, err := a.cache.Read(data)
-		if n < DataLength {
+		if n < DataLength-1 {
 			log.L.Error("get data's length is not 26 ", data)
 			return
 		}
@@ -227,7 +239,8 @@ func (a *App) handle(data []byte) {
 			log.L.Error("read err: ", err)
 			return
 		}
-		copy(d26[:], data)
+		d26[0] = head
+		copy(d26[1:], data)
 		err = a.protocol.Decode(d26)
 		if err != nil {
 			log.L.Error(fmt.Sprintf("decode the data %v err: %s", d26, err))
@@ -240,7 +253,7 @@ func (a *App) handle(data []byte) {
 	}
 }
 
-// Protocol get Protocol data, it will be block
+// Protocol get Protocol data, it will be blocked
 func (a *App) Protocol() *Protocol {
 	return <-a.chanProtocol
 }
