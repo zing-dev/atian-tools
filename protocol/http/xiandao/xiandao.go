@@ -50,7 +50,8 @@ func (h *HTTP) Post(request Request) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := h.Client.Post(h.URL, common.ContentTypeJson, bytes.NewBuffer(data))
+	log.L.Info(fmt.Sprintf("%s?locationCode=%s&status=%d", h.URL, request.LocationCode, request.Status))
+	resp, err := h.Client.Post(fmt.Sprintf("%s?locationCode=%s&status=%d", h.URL, request.LocationCode, request.Status), common.ContentTypeJson, bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
