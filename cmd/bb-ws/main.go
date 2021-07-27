@@ -88,7 +88,11 @@ func main() {
 	}
 
 	app.service = q5.NewIDtsWcfService(soap.NewClient(app.config.WebServiceUrl, soap.WithTimeout(time.Second*3)))
-	sensation := beida_bluebird.New(app.ctx, &beida_bluebird.Config{Port: app.config.SerialPort, MapFile: app.config.MapFile})
+	sensation := beida_bluebird.New(app.ctx, &beida_bluebird.Config{
+		Debug:   app.config.Debug,
+		Port:    app.config.SerialPort,
+		MapFile: app.config.MapFile,
+	})
 	go sensation.Run()
 	for {
 		select {
@@ -97,11 +101,12 @@ func main() {
 		default:
 			protocol := sensation.Protocol()
 			if app.config.Debug {
-				log.L.Info(protocol)
+				log.L.Info("protocol: ", protocol)
 			}
-			if protocol.IsCmdAlarm() {
-				log.L.Warn("产生了一个新的报警信息...")
+			if !protocol.IsCmdAlarm() && !protocol.IsCmdFailure() {
+				continue
 			}
+			log.L.Error("产生了一个新的报警信息...")
 			if protocol.IsTypeSmokeSensation() || protocol.PartType == beida_bluebird.PartTypeManual {
 				m := &beida_bluebird.Map{
 					Controller: protocol.Controller,
@@ -118,7 +123,9 @@ func main() {
 				for _, zone := range list {
 					names += fmt.Sprintf("%s, ", zone.Name)
 				}
-				log.L.Warn(names)
+				log.L.Error(names)
+				log.L.Error("报警命令: ", protocol.Cmd)
+				log.L.Error("部件类型: ", protocol.PartType)
 				for _, item := range list {
 					if protocol.IsCmdFailure() {
 						response, err := app.service.DeviceWarn(&q5.DeviceWarn{

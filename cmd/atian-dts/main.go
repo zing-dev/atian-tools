@@ -4,19 +4,14 @@ import (
 	"context"
 	"fmt"
 	"github.com/zing-dev/atian-tools/source/atian/dts"
+	"github.com/zing-dev/atian-tools/source/device"
 	"log"
 	"time"
 )
 
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
-	app := dts.New(ctx, dts.DTS{
-		Id:   1,
-		Name: "192.168.0.215",
-		Host: "192.168.0.215",
-	}, &dts.Config{
-		ChannelNum: 4,
-	})
+	app := dts.New(ctx, dts.DTS{Id: 1, Name: "192.168.0.86", Host: "192.168.0.86"}, &dts.Config{ChannelNum: 4})
 	app.CallTypes = []dts.CallType{dts.CallAlarm, dts.CallTemp, dts.CallEvent}
 	app.Run()
 	go func() {
@@ -36,6 +31,11 @@ func main() {
 			app.Client.Close()
 			fmt.Println("out")
 			return
+		case status := <-app.ChanStatus:
+			if status == device.Connected {
+				app.Register()
+				app.SyncZones()
+			}
 		case temp := <-app.ChanZonesTemp:
 			log.Println("temp", temp.DeviceId)
 		case sign := <-app.ChanChannelSignal:

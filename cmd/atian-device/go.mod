@@ -1,4 +1,4 @@
-module atian_device
+module atian-device
 
 go 1.16
 

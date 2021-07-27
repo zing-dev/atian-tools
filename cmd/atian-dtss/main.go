@@ -66,6 +66,8 @@ func main() {
 				case status := <-app.ChanStatus:
 					log.Println("status", status.String())
 					if status == device.Connected {
+						app.Register()
+						app.SyncZones()
 						log.Println("开始配置新能源防区结构层级...")
 						core.locker.Lock()
 						for _, zone := range app.Zones {
