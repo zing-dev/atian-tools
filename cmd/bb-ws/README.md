@@ -1,4 +1,4 @@
-# bb_ws
+# bb-ws
 
 ## 简介
 
@@ -17,9 +17,9 @@
 - 运行
 
 ```
-cmd → C:\atian\> bb_ws.exe
+cmd → C:\atian\> bb-ws.exe
 或
-gitbash → $ ./bb_ws.exe
+gitbash → $ ./bb-ws.exe
 ```
 
 ## 配置

@@ -410,6 +410,17 @@ func NewRelay(tag map[string]string) (Relay, error) {
 			continue
 		} else if len(r) < 2 {
 			return nil, errors.New("继电器标签字符值至少两位,例如A1")
+		} else if strings.Contains(r, "|") { //支持多继电器多路数
+			for _, v := range strings.Split(r, "|") {
+				if len(v) < 2 {
+					continue
+				} else if ok, _ := regexp.MatchString("^([1-9]*[1-9][0-9]*_)+[1-9]*[1-9][0-9]*$", v[1:]); ok {
+					//兼容这种形式 A1_2_3_4
+					relay[v[0]] = strings.ReplaceAll(v[1:], "_", ",")
+				} else if ok, _ := regexp.MatchString("^([1-9]*[1-9][0-9]*,)+[1-9]*[1-9][0-9]*$", v[1:]); ok {
+					relay[v[0]] = v[1:]
+				}
+			}
 		} else if ok, _ := regexp.MatchString("^([1-9]*[1-9][0-9]*_)+[1-9]*[1-9][0-9]*$", r[1:]); ok {
 			//兼容这种形式 A1_2_3_4
 			relay[r[0]] = strings.ReplaceAll(r[1:], "_", ",")
